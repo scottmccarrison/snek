@@ -24,7 +24,25 @@ export class World {
       snake.update(dt);
     }
     this.checkOutOfBounds();
+    this.checkSelfCollisions();
     this.checkSnakeVsSnake();
+  }
+
+  /**
+   * Kill any snake whose head intersects its own body. Previously only the
+   * player got this check; bots were immune to self-collision, which read
+   * as asymmetric rules.
+   */
+  private checkSelfCollisions(): void {
+    const deaths: string[] = [];
+    for (const snake of this.snakes.values()) {
+      if (snake.dead) continue;
+      if (snake.checkSelfCollision()) {
+        snake.die();
+        deaths.push(snake.id);
+      }
+    }
+    for (const id of deaths) this.events.onSnakeDied(id, null);
   }
 
   /** Exposed for unit tests that need to check collisions without running kinematics. */
