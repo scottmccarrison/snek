@@ -69,6 +69,28 @@ describe("Snake", () => {
     expect(snake.checkSelfCollision()).toBe(true);
   });
 
+  it("segments occupy distinct positions after one update with no input", () => {
+    // Regression: an earlier segment-placement bug caused segments[2..N] to
+    // stack at the same position after a single update because acc=target
+    // pinned the path index. The visible symptom was the snake self-colliding
+    // immediately on scene load.
+    const snake = new Snake(640, 360);
+    snake.update(1 / 60, 0, 0);
+    const positions = new Set(snake.segments.map((s) => `${s.x.toFixed(3)},${s.y.toFixed(3)}`));
+    expect(positions.size).toBe(snake.segments.length);
+  });
+
+  it("does not self-collide on the first update from a fresh snake", () => {
+    // Regression: paired with the segment-stacking bug, this caused the head
+    // to overlap stacked segments past selfCollisionSkip on the very first
+    // update.
+    const snake = new Snake(640, 360);
+    for (let i = 0; i < 30; i++) {
+      snake.update(1 / 60, 0, 0);
+      expect(snake.checkSelfCollision()).toBe(false);
+    }
+  });
+
   it("die() makes update() a no-op", () => {
     const snake = new Snake(100, 100);
     snake.die();

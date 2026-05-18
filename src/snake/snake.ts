@@ -68,27 +68,35 @@ export class Snake {
     this.segments[0].y = newHead.y;
 
     // Place each subsequent segment along the path at cumulative distance i*spacingPx.
-    let target = tuning.snake.spacingPx;
+    // acc tracks cumulative distance from headPath[0] to headPath[pathIdx] (the
+    // start of the current edge). On each i, walk forward until we find the edge
+    // that contains the target distance, then interpolate inside it. Do NOT set
+    // acc=target on placement: acc must stay anchored to pathIdx so the next i
+    // can walk forward from the same edge.
     let acc = 0;
     let pathIdx = 0;
 
     for (let i = 1; i < this.segments.length; i++) {
-      // Walk along headPath until accumulated distance reaches target.
-      while (pathIdx < this.headPath.length - 1 && acc < target) {
+      const target = i * tuning.snake.spacingPx;
+      while (pathIdx < this.headPath.length - 1) {
         const a = this.headPath[pathIdx];
         const b = this.headPath[pathIdx + 1];
         const step = Math.hypot(a.x - b.x, a.y - b.y);
         if (acc + step >= target) {
-          const frac = (target - acc) / step;
+          const frac = step > 0 ? (target - acc) / step : 0;
           this.segments[i].x = a.x + (b.x - a.x) * frac;
           this.segments[i].y = a.y + (b.y - a.y) * frac;
-          acc = target;
           break;
         }
         acc += step;
         pathIdx++;
       }
-      target += tuning.snake.spacingPx;
+      if (pathIdx >= this.headPath.length - 1) {
+        // Path exhausted; pin remaining segments to the last path point.
+        const last = this.headPath[this.headPath.length - 1];
+        this.segments[i].x = last.x;
+        this.segments[i].y = last.y;
+      }
     }
 
     // Trim deque: keep enough history to cover full length + safety buffer.
