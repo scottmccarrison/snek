@@ -15,21 +15,27 @@ import { tuning } from "../tuning";
 
 export class Minimap {
   private graphics: Phaser.GameObjects.Graphics;
-  private screenX: number;
-  private screenY: number;
 
-  constructor(scene: Phaser.Scene) {
-    const cam = scene.cameras.main;
-    this.screenX = cam.width - tuning.minimap.sizePx - tuning.minimap.insetPx;
-    this.screenY = cam.height - tuning.minimap.sizePx - tuning.minimap.insetPx;
+  constructor(private scene: Phaser.Scene) {
     this.graphics = scene.add.graphics();
     this.graphics.setScrollFactor(0).setDepth(2000);
   }
 
+  // Read camera dimensions per call rather than caching. With Phaser.Scale.FIT
+  // and the current game config, cam.width/height are static at the logical
+  // 1280x720, but reading per-call keeps the minimap correct if the scale mode
+  // ever changes (e.g., Scale.RESIZE) without an explicit resize handler.
+  private origin(): { sx: number; sy: number } {
+    const cam = this.scene.cameras.main;
+    return {
+      sx: cam.width - tuning.minimap.sizePx - tuning.minimap.insetPx,
+      sy: cam.height - tuning.minimap.sizePx - tuning.minimap.insetPx,
+    };
+  }
+
   render(headX: number, headY: number): void {
     const s = tuning.minimap.sizePx;
-    const sx = this.screenX;
-    const sy = this.screenY;
+    const { sx, sy } = this.origin();
     this.graphics.clear();
     // Frame background.
     this.graphics.fillStyle(tuning.minimap.bgColor, tuning.minimap.bgAlpha);
@@ -37,22 +43,21 @@ export class Minimap {
     // Border.
     this.graphics.lineStyle(2, tuning.minimap.borderColor, 1);
     this.graphics.strokeRect(sx, sy, s, s);
-    // Snake head dot, scaled. Clamp to minimap rect to avoid drawing
-    // outside the frame during the 1-frame out-of-bounds window.
-    const dotX = Math.max(sx, Math.min(sx + s, sx + (headX / tuning.world.widthPx) * s));
-    const dotY = Math.max(sy, Math.min(sy + s, sy + (headY / tuning.world.heightPx) * s));
+    // Snake head dot, scaled. Clamp center to (sx+r, sx+s-r) so the dot's
+    // edge stays inside the minimap rect during the 1-frame OOB window.
+    const r = tuning.minimap.dotRadiusPx;
+    const rawX = sx + (headX / tuning.world.widthPx) * s;
+    const rawY = sy + (headY / tuning.world.heightPx) * s;
+    const dotX = Math.max(sx + r, Math.min(sx + s - r, rawX));
+    const dotY = Math.max(sy + r, Math.min(sy + s - r, rawY));
     this.graphics.fillStyle(tuning.snake.headColor, 1);
-    this.graphics.fillCircle(dotX, dotY, tuning.minimap.dotRadiusPx);
+    this.graphics.fillCircle(dotX, dotY, r);
   }
 
   hitsMinimap(screenX: number, screenY: number): boolean {
     const s = tuning.minimap.sizePx;
-    return (
-      screenX >= this.screenX &&
-      screenX < this.screenX + s &&
-      screenY >= this.screenY &&
-      screenY < this.screenY + s
-    );
+    const { sx, sy } = this.origin();
+    return screenX >= sx && screenX < sx + s && screenY >= sy && screenY < sy + s;
   }
 
   destroy(): void {
