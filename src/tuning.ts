@@ -89,7 +89,7 @@ export const tuning: Tuning = {
     bodyRadiusPx: 7,
   },
   food: {
-    targetCount: 600,
+    targetCount: 2000,
     radiusPx: 5,
     color: 0xffc107,
     growthPerPellet: 1,
