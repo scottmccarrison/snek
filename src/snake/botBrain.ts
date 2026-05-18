@@ -83,21 +83,35 @@ export class BotBrain {
     this.elapsedMs += dt * 1000;
     const head = snake.segments[0];
 
-    // Flee check (highest priority): flee from snakes larger than self.
+    // Avoid check (highest priority): steer away from any non-self snake
+    // segment - head or body - that sits within fleeRadiusPx AND in the
+    // forward hemisphere of our current heading. Behind us we're already
+    // moving away. This replaces the prior "flee only from bigger snake
+    // heads" rule; bots now treat every body as an obstacle, which is
+    // closer to how a real player plays.
+    const headingX = this.currentDirX;
+    const headingY = this.currentDirY;
+    const hasHeading = headingX !== 0 || headingY !== 0;
     let nearestThreat: { x: number; y: number } | null = null;
     let nearestThreatDistSq = Number.POSITIVE_INFINITY;
+    const fr = tuning.bot.fleeRadiusPx;
+    const fr2 = fr * fr;
     for (const other of world.snakes.values()) {
       if (other.id === snake.id) continue;
       if (other.dead) continue;
-      if (other.segments.length <= snake.segments.length) continue;
-      const oh = other.segments[0];
-      const dx = oh.x - head.x;
-      const dy = oh.y - head.y;
-      const d2 = dx * dx + dy * dy;
-      const fr = tuning.bot.fleeRadiusPx;
-      if (d2 < fr * fr && d2 < nearestThreatDistSq) {
-        nearestThreat = { x: oh.x, y: oh.y };
-        nearestThreatDistSq = d2;
+      for (const s of other.segments) {
+        const dx = s.x - head.x;
+        const dy = s.y - head.y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 >= fr2) continue;
+        if (hasHeading) {
+          const alignment = dx * headingX + dy * headingY;
+          if (alignment <= 0) continue;
+        }
+        if (d2 < nearestThreatDistSq) {
+          nearestThreat = s;
+          nearestThreatDistSq = d2;
+        }
       }
     }
     if (nearestThreat) {
