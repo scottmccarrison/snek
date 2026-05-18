@@ -2,14 +2,17 @@ import * as Phaser from "phaser";
 import { SpatialHash } from "../../shared/spatialHash";
 import { type FoodItem, FoodSpawner } from "../food/foodSpawner";
 import { PointerSteering } from "../input/pointer";
+import { BotManager } from "../sim/botManager";
+import { World } from "../sim/world";
 import { Snake } from "../snake/snake";
 import { SnakeView } from "../snake/snakeView";
 import { tuning } from "../tuning";
 import { Minimap } from "../ui/minimap";
 
 export class GameScene extends Phaser.Scene {
-  private snake!: Snake;
-  private snakeView!: SnakeView;
+  private world!: World;
+  private botManager!: BotManager;
+  private snakeViews: Map<string, SnakeView> = new Map();
   private steering!: PointerSteering;
   private foodHash!: SpatialHash<FoodItem>;
   private foodSpawner!: FoodSpawner;
@@ -84,8 +87,25 @@ export class GameScene extends Phaser.Scene {
   private startGame(): void {
     const cx = tuning.world.widthPx / 2;
     const cy = tuning.world.heightPx / 2;
-    this.snake = new Snake(cx, cy);
-    this.snakeView = new SnakeView(this, this.snake);
+
+    // Set up world with event handler.
+    this.world = new World({
+      onSnakeDied: (snakeId, killedBy) => this.onSnakeDiedHandler(snakeId, killedBy),
+    });
+
+    // Create player snake with explicit config (white outline for distinction).
+    const player = new Snake(cx, cy, {
+      id: "player",
+      ownerType: "player",
+      color: tuning.snake.headColor,
+    });
+    this.world.addSnake(player);
+    const playerView = new SnakeView(this, player, {
+      outlineExtraPx: tuning.bot.playerOutlineExtraPx,
+      outlineColor: tuning.bot.playerOutlineColor,
+      outlineAlpha: tuning.bot.playerOutlineAlpha,
+    });
+    this.snakeViews.set("player", playerView);
 
     // Construct minimap first so the steering callback can reference it.
     this.minimap = new Minimap(this);
@@ -96,19 +116,21 @@ export class GameScene extends Phaser.Scene {
 
     this.foodHash = new SpatialHash<FoodItem>(tuning.world.spatialBucketPx);
     this.foodSpawner = new FoodSpawner(this, this.foodHash);
-    this.foodSpawner.update(this.snake);
+    this.foodSpawner.update(this.world);
+
+    // Set up bot manager with onBotSpawned callback to create views.
+    this.botManager = new BotManager(this.world, this.foodSpawner);
+    this.botManager.onBotSpawned = (snake) => {
+      const view = new SnakeView(this, snake);
+      this.snakeViews.set(snake.id, view);
+    };
 
     // Camera follows the snake head. Phaser.Camera.startFollow's signature
     // accepts `GameObject | object` and reads `.x`/`.y` each frame, so the
     // plain segments[0] works directly with no cast. Re-call after every
     // Snake construction OR Snake.reset() - segments[0] object identity
     // changes on reset.
-    this.cameras.main.startFollow(
-      this.snake.segments[0],
-      true,
-      tuning.camera.lerp,
-      tuning.camera.lerp,
-    );
+    this.cameras.main.startFollow(player.segments[0], true, tuning.camera.lerp, tuning.camera.lerp);
 
     if (this.restartPrompt) {
       this.restartPrompt.destroy();
@@ -120,22 +142,47 @@ export class GameScene extends Phaser.Scene {
   update(_time: number, deltaMs: number): void {
     const dt = Math.min(deltaMs / 1000, 1 / 30);
     if (this.waitingForRestart) return;
-    if (this.snake.dead) return;
 
-    const head = this.snake.segments[0];
+    const player = this.world.snakes.get("player");
+    if (!player || player.dead) return;
+
+    const head = player.segments[0];
     const { dirX, dirY } = this.steering.update(dt, head.x, head.y);
-    this.snake.update(dt, dirX, dirY);
+    player.pendingDirX = dirX;
+    player.pendingDirY = dirY;
 
-    this.foodSpawner.checkEat(this.snake);
-    this.foodSpawner.update(this.snake);
+    this.botManager.update(dt, head.x, head.y);
+    this.world.update(dt);
 
-    if (this.snake.checkSelfCollision() || this.isOutOfBounds(this.snake.segments[0])) {
+    this.foodSpawner.checkEat(player);
+    this.foodSpawner.update(this.world);
+
+    // Check self-collision and OOB for player (World handles snake-vs-snake).
+    if (player.checkSelfCollision() || this.isOutOfBounds(player.segments[0])) {
       void this.handleDeath();
       return;
     }
 
-    this.snakeView.render();
-    this.minimap.render(head.x, head.y);
+    // Render all snake views.
+    for (const view of this.snakeViews.values()) {
+      view.render();
+    }
+
+    this.minimap.render(head.x, head.y, this.world);
+  }
+
+  private onSnakeDiedHandler(snakeId: string, _killedBy: string | null): void {
+    if (snakeId === "player") {
+      void this.handleDeath();
+      return;
+    }
+    // Bot death: remove its view and let BotManager handle respawn + pellets.
+    const view = this.snakeViews.get(snakeId);
+    if (view) {
+      view.destroy();
+      this.snakeViews.delete(snakeId);
+    }
+    this.botManager.handleSnakeDeath(snakeId);
   }
 
   private isOutOfBounds(head: { x: number; y: number }): boolean {
@@ -145,8 +192,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   private async handleDeath(): Promise<void> {
-    this.snake.die();
-    await this.snakeView.playDeathAnimation();
+    const player = this.world.snakes.get("player");
+    if (!player) return;
+    player.die();
+    const view = this.snakeViews.get("player");
+    if (view) await view.playDeathAnimation();
     this.showRestartPrompt();
   }
 
@@ -174,11 +224,15 @@ export class GameScene extends Phaser.Scene {
   }
 
   private restart(): void {
-    this.snakeView.destroy();
+    for (const view of this.snakeViews.values()) {
+      view.destroy();
+    }
+    this.snakeViews.clear();
     this.steering.destroy();
     this.foodSpawner.destroy();
     this.foodHash.clear();
     this.minimap.destroy();
+    this.botManager.destroy();
     this.startGame();
   }
 }

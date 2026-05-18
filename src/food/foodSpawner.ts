@@ -1,6 +1,6 @@
 /**
  * FoodSpawner - maintains tuning.food.targetCount pellets in the world,
- * rejection-sampling to keep them out of the snake's body.
+ * rejection-sampling to keep them out of snake bodies.
  *
  * Food balance loop adapted from
  * https://github.com/owenashurst/agar.io-clone/blob/master/src/server/server.js
@@ -16,6 +16,12 @@ export interface FoodItem {
   id: string;
   x: number;
   y: number;
+  isPellet: boolean;
+}
+
+// Structural type - avoids circular dep with world.ts until it exists.
+interface WorldLike {
+  snakes: Map<string, Snake>;
 }
 
 export class FoodSpawner {
@@ -34,23 +40,31 @@ export class FoodSpawner {
     this.graphics = scene.add.graphics();
   }
 
-  update(snake: Snake): void {
+  update(world: WorldLike): void {
     let attempts = 0;
     const maxAttempts = tuning.food.targetCount * 20;
     while (this.foods.size < tuning.food.targetCount && attempts < maxAttempts) {
       attempts++;
       const x = Math.random() * tuning.world.widthPx;
       const y = Math.random() * tuning.world.heightPx;
-      if (this.collidesWithSnake(x, y, snake)) continue;
+      let collides = false;
+      for (const s of world.snakes.values()) {
+        if (s.dead) continue;
+        if (this.collidesWithSnakeBody(x, y, s)) {
+          collides = true;
+          break;
+        }
+      }
+      if (collides) continue;
       const id = `food-${this.nextId++}`;
-      const item: FoodItem = { id, x, y };
+      const item: FoodItem = { id, x, y, isPellet: false };
       this.foods.set(id, item);
       this.hash.insert(id, x, y, item);
     }
     this.render();
   }
 
-  private collidesWithSnake(x: number, y: number, snake: Snake): boolean {
+  private collidesWithSnakeBody(x: number, y: number, snake: Snake): boolean {
     const r = tuning.food.radiusPx + tuning.snake.bodyRadiusPx;
     const r2 = r * r;
     for (const seg of snake.segments) {
@@ -59,6 +73,26 @@ export class FoodSpawner {
       if (dx * dx + dy * dy < r2) return true;
     }
     return false;
+  }
+
+  spawnPelletBurst(segments: ReadonlyArray<{ x: number; y: number }>): void {
+    const count = Math.max(1, Math.floor(segments.length * tuning.death.pelletsPerSegment));
+    const step = segments.length / count;
+    for (let i = 0; i < count; i++) {
+      const idx = Math.min(segments.length - 1, Math.floor(i * step));
+      const seg = segments[idx];
+      const jx = (Math.random() * 2 - 1) * tuning.death.pelletJitterPx;
+      const jy = (Math.random() * 2 - 1) * tuning.death.pelletJitterPx;
+      const id = `pellet-${this.nextId++}`;
+      const item: FoodItem = { id, x: seg.x + jx, y: seg.y + jy, isPellet: true };
+      this.foods.set(id, item);
+      this.hash.insert(id, item.x, item.y, item);
+    }
+    this.render();
+  }
+
+  getFoods(): ReadonlyArray<FoodItem> {
+    return Array.from(this.foods.values());
   }
 
   checkEat(snake: Snake): number {
@@ -74,7 +108,8 @@ export class FoodSpawner {
       if (dx * dx + dy * dy < r2) {
         this.foods.delete(f.id);
         this.hash.remove(f.id);
-        snake.grow(tuning.food.growthPerPellet);
+        const growthMultiplier = f.isPellet ? tuning.death.pelletGrowthMultiplier : 1;
+        snake.grow(tuning.food.growthPerPellet * growthMultiplier);
         eaten++;
       }
     }
@@ -83,9 +118,14 @@ export class FoodSpawner {
 
   private render(): void {
     this.graphics.clear();
-    this.graphics.fillStyle(tuning.food.color);
     for (const f of this.foods.values()) {
-      this.graphics.fillCircle(f.x, f.y, tuning.food.radiusPx);
+      if (f.isPellet) {
+        this.graphics.fillStyle(tuning.death.pelletColor);
+        this.graphics.fillCircle(f.x, f.y, tuning.death.pelletRadiusPx);
+      } else {
+        this.graphics.fillStyle(tuning.food.color);
+        this.graphics.fillCircle(f.x, f.y, tuning.food.radiusPx);
+      }
     }
   }
 

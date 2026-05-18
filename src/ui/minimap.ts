@@ -11,6 +11,7 @@
  */
 
 import type * as Phaser from "phaser";
+import type { World } from "../sim/world";
 import { tuning } from "../tuning";
 
 export class Minimap {
@@ -33,7 +34,7 @@ export class Minimap {
     };
   }
 
-  render(headX: number, headY: number): void {
+  render(playerHeadX: number, playerHeadY: number, world: World): void {
     const s = tuning.minimap.sizePx;
     const { sx, sy } = this.origin();
     this.graphics.clear();
@@ -43,11 +44,26 @@ export class Minimap {
     // Border.
     this.graphics.lineStyle(2, tuning.minimap.borderColor, 1);
     this.graphics.strokeRect(sx, sy, s, s);
-    // Snake head dot, scaled. Clamp center to (sx+r, sx+s-r) so the dot's
-    // edge stays inside the minimap rect during the 1-frame OOB window.
+
     const r = tuning.minimap.dotRadiusPx;
-    const rawX = sx + (headX / tuning.world.widthPx) * s;
-    const rawY = sy + (headY / tuning.world.heightPx) * s;
+    const botR = Math.max(1, r - 1);
+
+    // Bot dots (dim, smaller, drawn first so player dot renders on top).
+    for (const snake of world.snakes.values()) {
+      if (snake.id === "player") continue;
+      if (snake.dead) continue;
+      const h = snake.segments[0];
+      const rawX = sx + (h.x / tuning.world.widthPx) * s;
+      const rawY = sy + (h.y / tuning.world.heightPx) * s;
+      const dotX = Math.max(sx + botR, Math.min(sx + s - botR, rawX));
+      const dotY = Math.max(sy + botR, Math.min(sy + s - botR, rawY));
+      this.graphics.fillStyle(snake.color, tuning.bot.minimapDotAlpha);
+      this.graphics.fillCircle(dotX, dotY, botR);
+    }
+
+    // Player dot (bright, full radius, on top).
+    const rawX = sx + (playerHeadX / tuning.world.widthPx) * s;
+    const rawY = sy + (playerHeadY / tuning.world.heightPx) * s;
     const dotX = Math.max(sx + r, Math.min(sx + s - r, rawX));
     const dotY = Math.max(sy + r, Math.min(sy + s - r, rawY));
     this.graphics.fillStyle(tuning.snake.headColor, 1);

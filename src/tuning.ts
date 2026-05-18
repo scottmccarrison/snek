@@ -24,8 +24,29 @@ export interface Tuning {
     bgFillColor: number;
     bgGridColor: number;
   };
+  bot: {
+    targetCount: number;
+    viewRadiusPx: number;
+    fleeRadiusPx: number;
+    seekRadiusPx: number;
+    wanderResampleMs: number;
+    respawnDelayMs: number;
+    minRespawnDistFromPlayerPx: number;
+    minLength: number;
+    maxLength: number;
+    palette: number[];
+    playerOutlineExtraPx: number;
+    playerOutlineColor: number;
+    playerOutlineAlpha: number;
+    minimapDotAlpha: number;
+  };
   death: {
     fadeMs: number;
+    pelletsPerSegment: number;
+    pelletJitterPx: number;
+    pelletColor: number;
+    pelletRadiusPx: number;
+    pelletGrowthMultiplier: number;
   };
   camera: {
     lerp: number;
@@ -73,8 +94,29 @@ export const tuning: Tuning = {
     bgFillColor: 0x111118,
     bgGridColor: 0x2a2a35,
   },
+  bot: {
+    targetCount: 10,
+    viewRadiusPx: 300,
+    fleeRadiusPx: 250,
+    seekRadiusPx: 200,
+    wanderResampleMs: 3000,
+    respawnDelayMs: 2000,
+    minRespawnDistFromPlayerPx: 600,
+    minLength: 8,
+    maxLength: 30,
+    palette: [0xe53935, 0x1976d2, 0xf57c00, 0x7b1fa2, 0xfbc02d, 0x00838f, 0xe91e63, 0x5d4037],
+    playerOutlineExtraPx: 2,
+    playerOutlineColor: 0xffffff,
+    playerOutlineAlpha: 0.3,
+    minimapDotAlpha: 0.7,
+  },
   death: {
     fadeMs: 500,
+    pelletsPerSegment: 0.5,
+    pelletJitterPx: 8,
+    pelletColor: 0xffeb3b,
+    pelletRadiusPx: 7,
+    pelletGrowthMultiplier: 2,
   },
   camera: {
     lerp: 0.12,
