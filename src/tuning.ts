@@ -21,9 +21,29 @@ export interface Tuning {
     widthPx: number;
     heightPx: number;
     spatialBucketPx: number;
+    bgFillColor: number;
+    bgGridColor: number;
   };
   death: {
     fadeMs: number;
+  };
+  camera: {
+    lerp: number;
+  };
+  edge: {
+    borderPx: number;
+    borderColor: number;
+    vignettePx: number;
+    vignetteColor: number;
+    vignetteAlpha: number;
+  };
+  minimap: {
+    sizePx: number;
+    insetPx: number;
+    dotRadiusPx: number;
+    bgColor: number;
+    bgAlpha: number;
+    borderColor: number;
   };
 }
 
@@ -47,11 +67,31 @@ export const tuning: Tuning = {
     growthPerPellet: 4,
   },
   world: {
-    widthPx: 1280,
-    heightPx: 720,
+    widthPx: 4000,
+    heightPx: 4000,
     spatialBucketPx: 80,
+    bgFillColor: 0x111118,
+    bgGridColor: 0x2a2a35,
   },
   death: {
     fadeMs: 500,
+  },
+  camera: {
+    lerp: 0.12,
+  },
+  edge: {
+    borderPx: 4,
+    borderColor: 0xc62828,
+    vignettePx: 100,
+    vignetteColor: 0xc62828,
+    vignetteAlpha: 0.18,
+  },
+  minimap: {
+    sizePx: 160,
+    insetPx: 16,
+    dotRadiusPx: 4,
+    bgColor: 0x0b0b0f,
+    bgAlpha: 0.55,
+    borderColor: 0x88ddff,
   },
 };

@@ -40,4 +40,28 @@ describe("SpatialHash", () => {
     const hash = new SpatialHash<number>(10);
     expect(hash.queryCircle(0, 0, 100)).toHaveLength(0);
   });
+
+  it("handles 10k items at 4000x4000 world scale", () => {
+    const hash = new SpatialHash<number>(80);
+    // Seed the RNG-like loop deterministically.
+    for (let i = 0; i < 10_000; i++) {
+      const x = (i * 991) % 4000;
+      const y = (i * 1747) % 4000;
+      hash.insert(`item-${i}`, x, y, i);
+    }
+    // 100 random-ish queries should each return a bounded number of candidates.
+    let totalCandidates = 0;
+    const startMs = performance.now();
+    for (let q = 0; q < 100; q++) {
+      const qx = (q * 173) % 4000;
+      const qy = (q * 281) % 4000;
+      const results = hash.queryCircle(qx, qy, 100);
+      totalCandidates += results.length;
+    }
+    const elapsed = performance.now() - startMs;
+    // Loose budget: 100 queries < 50ms in node (catches O(n^2) regressions).
+    expect(elapsed).toBeLessThan(50);
+    // Sanity: queries returned SOME items (not zero across all 100).
+    expect(totalCandidates).toBeGreaterThan(0);
+  });
 });
