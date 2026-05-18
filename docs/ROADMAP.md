@@ -6,16 +6,16 @@ Source of truth: [GitHub issues](https://github.com/scottmccarrison/snek/issues)
 
 Solo + bots first (Phases 0-4), then multiplayer (Phases 5-7). The game is "fun" by end of Phase 3 without any backend; netcode complexity is easier to design once the deterministic sim works locally.
 
-| # | Phase | Status | Plan |
-|---|---|---|---|
-| 0 | Scaffolding (Vite, Phaser, Biome, CI, deploy stub) | In progress | (Phase 0 ships as 4 small PRs; no separate plan doc) |
-| 1 | Solo snake on single screen | Todo | - |
-| 2 | Larger world + camera + minimap | Todo | - |
-| 3 | Bot snakes (FSM AI, snake-vs-snake, death-to-pellets) | Todo | - |
-| 4 | Polish + feel (boost, HUD, death screen, audio, mobile touch) | Todo | - |
-| 5 | MP foundation (CF Worker + DO + 20Hz tick + WS protocol + reconnect) | Todo | - |
-| 6 | MP correctness (prediction, interpolation, lag comp, viewport culling, binary decision) | Todo | - |
-| 7 | MP feel + polish (server-side bots, killfeed, cross-room leaderboard, QR share, anti-grief) | Todo | - |
+| # | Phase | Status | PR | Plan |
+|---|---|---|---|---|
+| 0 | Scaffolding (Vite, Phaser, Biome, CI, deploy stub) | Done | - | (Phase 0 ships as 4 small PRs; no separate plan doc) |
+| 1 | Solo snake on single screen | Done | [#15](https://github.com/scottmccarrison/snek/pull/15) | [phase-1-solo-snake.md](plans/phase-1-solo-snake.md) |
+| 2 | Larger world + camera + minimap | Todo | - | - |
+| 3 | Bot snakes (FSM AI, snake-vs-snake, death-to-pellets) | Todo | - | - |
+| 4 | Polish + feel (boost, HUD, death screen, audio, mobile touch) | Todo | - | - |
+| 5 | MP foundation (CF Worker + DO + 20Hz tick + WS protocol + reconnect) | Todo | - | - |
+| 6 | MP correctness (prediction, interpolation, lag comp, viewport culling, binary decision) | Todo | - | - |
+| 7 | MP feel + polish (server-side bots, killfeed, cross-room leaderboard, QR share, anti-grief) | Todo | - | - |
 
 Overall plan with detailed per-issue breakdown: [docs/plans/overall.md](plans/overall.md).
 
