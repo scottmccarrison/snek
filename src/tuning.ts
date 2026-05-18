@@ -81,7 +81,7 @@ export const tuning: Tuning = {
   snake: {
     speedPxPerSec: 180,
     spacingPx: 8,
-    turnRateRadPerSec: 6,
+    turnRateRadPerSec: 11,
     selfCollisionSkip: 6,
     initialLength: 20,
     headColor: 0x4caf50,
@@ -119,9 +119,9 @@ export const tuning: Tuning = {
     playerOutlineAlpha: 0.3,
     minimapDotAlpha: 0.7,
     // Smooth sine drift applied to seek_food and wander headings so bots
-    // don't head laser-straight at every pellet. 0.4rad = ~23deg max sway,
+    // don't head laser-straight at every pellet. 0.8rad = ~46deg max sway,
     // 0.003 rad/ms = ~2.1s per oscillation cycle.
-    driftAngleRad: 0.4,
+    driftAngleRad: 0.8,
     driftFrequency: 0.003,
   },
   death: {
