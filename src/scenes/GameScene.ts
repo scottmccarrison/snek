@@ -81,8 +81,14 @@ export class GameScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setDepth(1000);
-    this.input.once("pointerdown", () => this.restart());
-    this.input.keyboard?.once("keydown-SPACE", () => this.restart());
+    let consumed = false;
+    const doRestart = () => {
+      if (consumed) return;
+      consumed = true;
+      this.restart();
+    };
+    this.input.once("pointerdown", doRestart);
+    this.input.keyboard?.once("keydown-SPACE", doRestart);
   }
 
   private restart(): void {
