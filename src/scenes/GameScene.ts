@@ -163,7 +163,13 @@ export class GameScene extends Phaser.Scene {
     this.botManager.update(dt, head.x, head.y);
     this.world.update(dt);
 
-    this.foodSpawner.checkEat(player);
+    // Every living snake gets a chance to eat food (not just the player).
+    // Without this, bots stop on top of pellets without consuming them and
+    // oscillate around them via the seek_food FSM state.
+    for (const snake of this.world.snakes.values()) {
+      if (snake.dead) continue;
+      this.foodSpawner.checkEat(snake);
+    }
     this.foodSpawner.update(this.world);
 
     // Check self-collision and OOB for player (World handles snake-vs-snake).
