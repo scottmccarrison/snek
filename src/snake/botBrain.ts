@@ -12,6 +12,12 @@ export class BotBrain {
   // Per-bot phase offset so drifting bots don't all sway in sync. Stays
   // constant for the bot's lifetime.
   private driftPhase: number;
+  // Smoothed heading. The bot's FSM produces a TARGET direction each frame;
+  // we rotate currentDir toward target at tuning.bot.turnRateRadPerSec to
+  // prevent instant flips (which produced sharp angles in the body).
+  private currentDirX = 0;
+  private currentDirY = 0;
+  private hasHeading = false;
 
   constructor() {
     this.wanderTarget = this.pickRandomTarget();
@@ -32,6 +38,33 @@ export class BotBrain {
     const baseAngle = Math.atan2(dy, dx);
     const a = baseAngle + this.drift();
     return { dirX: Math.cos(a), dirY: Math.sin(a) };
+  }
+
+  // Smooth currentDir toward the target direction at the bot turn rate.
+  // First call snaps directly (no prior heading). Subsequent calls clamp
+  // the angular delta to maxStep = turnRate * dt.
+  private smooth(
+    targetDirX: number,
+    targetDirY: number,
+    dt: number,
+  ): { dirX: number; dirY: number } {
+    if (!this.hasHeading) {
+      this.currentDirX = targetDirX;
+      this.currentDirY = targetDirY;
+      this.hasHeading = true;
+      return { dirX: this.currentDirX, dirY: this.currentDirY };
+    }
+    const currentAngle = Math.atan2(this.currentDirY, this.currentDirX);
+    const targetAngle = Math.atan2(targetDirY, targetDirX);
+    let delta = targetAngle - currentAngle;
+    while (delta > Math.PI) delta -= 2 * Math.PI;
+    while (delta < -Math.PI) delta += 2 * Math.PI;
+    const maxStep = tuning.bot.turnRateRadPerSec * dt;
+    const step = Math.max(-maxStep, Math.min(maxStep, delta));
+    const newAngle = currentAngle + step;
+    this.currentDirX = Math.cos(newAngle);
+    this.currentDirY = Math.sin(newAngle);
+    return { dirX: this.currentDirX, dirY: this.currentDirY };
   }
 
   private pickRandomTarget(): { x: number; y: number } {
@@ -72,7 +105,7 @@ export class BotBrain {
       const dx = head.x - nearestThreat.x;
       const dy = head.y - nearestThreat.y;
       const len = Math.hypot(dx, dy) || 1;
-      return { dirX: dx / len, dirY: dy / len };
+      return this.smooth(dx / len, dy / len, dt);
     }
 
     // Seek food check.
@@ -90,7 +123,8 @@ export class BotBrain {
     }
     if (nearestFood) {
       this.state = "seek_food";
-      return this.applyDrift(nearestFood.x - head.x, nearestFood.y - head.y);
+      const target = this.applyDrift(nearestFood.x - head.x, nearestFood.y - head.y);
+      return this.smooth(target.dirX, target.dirY, dt);
     }
 
     // Wander: resample target periodically.
@@ -102,6 +136,7 @@ export class BotBrain {
       this.lastResampleMs = this.elapsedMs;
     }
     this.state = "wander";
-    return this.applyDrift(this.wanderTarget.x - head.x, this.wanderTarget.y - head.y);
+    const target = this.applyDrift(this.wanderTarget.x - head.x, this.wanderTarget.y - head.y);
+    return this.smooth(target.dirX, target.dirY, dt);
   }
 }

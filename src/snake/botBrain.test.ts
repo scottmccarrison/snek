@@ -47,9 +47,10 @@ describe("BotBrain", () => {
     // Place food to the right within seekRadiusPx.
     const foods = [{ x: 500 + tuning.bot.seekRadiusPx - 10, y: 500, isPellet: false }];
     const { dirX, dirY } = brain.update(bot, world, foods, 1 / 60);
-    // Should seek right.
-    expect(dirX).toBeGreaterThan(0);
-    expect(Math.abs(dirY)).toBeLessThan(0.01);
+    // Should seek roughly right. Drift up to driftAngleRad can swing dirY
+    // within sin(drift) of zero - allow that band.
+    expect(dirX).toBeGreaterThan(Math.cos(tuning.bot.driftAngleRad) - 0.01);
+    expect(Math.abs(dirY)).toBeLessThan(Math.sin(tuning.bot.driftAngleRad) + 0.01);
   });
 
   it("wanders when no threat and no food in range", () => {
