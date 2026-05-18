@@ -31,7 +31,10 @@ export class PointerSteering {
   private pointerDownHandler: (p: Phaser.Input.Pointer) => void;
   private pointerMoveHandler: (p: Phaser.Input.Pointer) => void;
 
-  constructor(private scene: Phaser.Scene) {
+  constructor(
+    private scene: Phaser.Scene,
+    private shouldIgnore: ((screenX: number, screenY: number) => boolean) | null = null,
+  ) {
     this.pointerDownHandler = (p) => this.onPointer(p);
     this.pointerMoveHandler = (p) => this.onPointer(p);
     scene.input.on("pointerdown", this.pointerDownHandler);
@@ -40,6 +43,7 @@ export class PointerSteering {
   }
 
   private onPointer(p: Phaser.Input.Pointer): void {
+    if (this.shouldIgnore?.(p.x, p.y)) return;
     this.lastPointerX = p.worldX;
     this.lastPointerY = p.worldY;
     this.hasPointer = true;
