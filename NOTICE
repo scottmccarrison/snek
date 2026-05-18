@@ -1,0 +1,15 @@
+snek - snake.io / slither.io clone
+
+This project includes algorithms adapted from the following open-source
+projects. No source code is copied verbatim; the implementations here
+are rewrites in TypeScript that follow the original algorithms.
+
+- knagaitsev/slither.io-clone (MIT)
+  - Segment-chain kinematics:       src/snake/snake.ts
+  - Mouse-angle steering math:      src/input/pointer.ts
+
+- jondubois/iogrid (MIT)
+  - Spatial hash grid:              shared/spatialHash.ts
+
+- owenashurst/agar.io-clone (MIT)
+  - Food balance loop:              src/food/foodSpawner.ts
