@@ -172,12 +172,10 @@ export class GameScene extends Phaser.Scene {
     }
     this.foodSpawner.update(this.world);
 
-    // Self-collision is still GameScene's job (World handles snake-vs-snake +
-    // out-of-bounds for all snakes uniformly).
-    if (player.checkSelfCollision()) {
-      void this.handleDeath();
-      return;
-    }
+    // Death checks (self-collision, out-of-bounds, snake-vs-snake) all run
+    // inside World.update and fire onSnakeDied uniformly. GameScene's
+    // handler routes player deaths to handleDeath and bot deaths to
+    // BotManager's respawn timer. Nothing to check here.
 
     // Render all snake views.
     for (const view of this.snakeViews.values()) {
