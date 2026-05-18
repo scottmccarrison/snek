@@ -24,13 +24,14 @@ describe("Snake", () => {
     expect(dist).toBeCloseTo(tuning.snake.spacingPx, 0); // within 0.5px
   });
 
-  it("initial length is 8 segments", () => {
+  it("initial length matches tuning.snake.initialLength", () => {
     const snake = new Snake(100, 100);
-    expect(snake.segments.length).toBe(8);
+    expect(snake.segments.length).toBe(tuning.snake.initialLength);
   });
 
   it("grow(n) appends n segments after enough frames", () => {
     const snake = new Snake(100, 100);
+    const startLen = snake.segments.length;
     snake.grow(4);
     // Run until length stabilizes (growth is consumed each frame).
     let prevLen = snake.segments.length;
@@ -45,7 +46,7 @@ describe("Snake", () => {
         prevLen = snake.segments.length;
       }
     }
-    expect(snake.segments.length).toBe(12);
+    expect(snake.segments.length).toBe(startLen + 4);
   });
 
   it("checkSelfCollision returns false on fresh snake", () => {

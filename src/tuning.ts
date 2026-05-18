@@ -81,7 +81,7 @@ export const tuning: Tuning = {
     spacingPx: 8,
     turnRateRadPerSec: 6,
     selfCollisionSkip: 6,
-    initialLength: 8,
+    initialLength: 20,
     headColor: 0x4caf50,
     bodyColor: 0x388e3c,
     deadColor: 0xc62828,
@@ -89,10 +89,10 @@ export const tuning: Tuning = {
     bodyRadiusPx: 7,
   },
   food: {
-    targetCount: 50,
+    targetCount: 150,
     radiusPx: 5,
     color: 0xffc107,
-    growthPerPellet: 4,
+    growthPerPellet: 1,
   },
   world: {
     widthPx: 4000,
