@@ -35,6 +35,11 @@ export class PointerSteering {
   private touchCurrentX = 0;
   private touchCurrentY = 0;
   private touchDragging = false;
+  // ID of the touch pointer currently driving the joystick. Secondary
+  // touches (palm contact, second finger) are ignored - we only honor
+  // the first touchdown until that pointer lifts. Prevents accidental
+  // multi-touch from stealing the anchor or releasing it early.
+  private activeTouchId: number | null = null;
   private currentDirX = 0;
   private currentDirY = 0;
   private hasInput = false;
@@ -66,6 +71,10 @@ export class PointerSteering {
       this.mouseLastWorldY = p.worldY;
       this.hasMousePointer = true;
     } else {
+      // Only honor the FIRST touch. Secondary touches are ignored until
+      // the active one lifts.
+      if (this.activeTouchId !== null) return;
+      this.activeTouchId = p.id;
       this.touchAnchorX = p.x;
       this.touchAnchorY = p.y;
       this.touchCurrentX = p.x;
@@ -82,6 +91,8 @@ export class PointerSteering {
       this.mouseLastWorldY = p.worldY;
       this.hasMousePointer = true;
     } else {
+      // Ignore moves from any pointer other than the active one.
+      if (p.id !== this.activeTouchId) return;
       if (!this.touchDragging) return;
       this.touchCurrentX = p.x;
       this.touchCurrentY = p.y;
@@ -90,10 +101,13 @@ export class PointerSteering {
   }
 
   private onPointerUp(p: Phaser.Input.Pointer): void {
-    if (p.wasTouch) {
-      this.touchDragging = false;
-      this.opts.onTouchEnd?.();
-    }
+    if (!p.wasTouch) return;
+    // Only the ACTIVE touch lifting releases the joystick. Lifting a
+    // secondary finger does not stop steering with the primary thumb.
+    if (p.id !== this.activeTouchId) return;
+    this.activeTouchId = null;
+    this.touchDragging = false;
+    this.opts.onTouchEnd?.();
   }
 
   private readArrows(): { x: number; y: number } | null {

@@ -35,13 +35,21 @@ function createSceneStub() {
     cursors,
     firePointer: (
       event: "pointerdown" | "pointermove" | "pointerup",
-      p: { worldX: number; worldY: number; x?: number; y?: number; pointerType?: string },
+      p: {
+        worldX: number;
+        worldY: number;
+        x?: number;
+        y?: number;
+        pointerType?: string;
+        id?: number;
+      },
     ) =>
       input.emit(event, {
         ...p,
         wasTouch: (p.pointerType ?? "mouse") !== "mouse",
         x: p.x ?? 0,
         y: p.y ?? 0,
+        id: p.id ?? 1,
       }),
   };
 }
@@ -201,6 +209,98 @@ describe("PointerSteering", () => {
     for (let i = 0; i < 125; i++) {
       result = steer.update(0.016, 0, 0);
     }
+    expect(result.dirX).toBeGreaterThan(0.99);
+  });
+
+  it("touch input: secondary touch is ignored while primary is active", () => {
+    const stub = createSceneStub();
+    const steer = new PointerSteering(stub as unknown as import("phaser").Scene);
+    // Primary touchdown + drag right.
+    stub.firePointer("pointerdown", {
+      x: 100,
+      y: 100,
+      worldX: 100,
+      worldY: 100,
+      pointerType: "touch",
+      id: 1,
+    });
+    stub.firePointer("pointermove", {
+      x: 200,
+      y: 100,
+      worldX: 200,
+      worldY: 100,
+      pointerType: "touch",
+      id: 1,
+    });
+    // Secondary touch at a far point - should be ignored.
+    stub.firePointer("pointerdown", {
+      x: 500,
+      y: 500,
+      worldX: 500,
+      worldY: 500,
+      pointerType: "touch",
+      id: 2,
+    });
+    stub.firePointer("pointermove", {
+      x: 600,
+      y: 600,
+      worldX: 600,
+      worldY: 600,
+      pointerType: "touch",
+      id: 2,
+    });
+    // Drive the steering. Direction should reflect ONLY the primary anchor at
+    // (100, 100) with current at (200, 100) - dirX positive, dirY ~ 0.
+    let result = { dirX: 0, dirY: 0 };
+    for (let i = 0; i < 125; i++) {
+      result = steer.update(0.016, 0, 0);
+    }
+    expect(result.dirX).toBeGreaterThan(0.99);
+    expect(Math.abs(result.dirY)).toBeLessThan(0.01);
+  });
+
+  it("touch input: secondary touch lifting does not stop primary steering", () => {
+    const stub = createSceneStub();
+    const steer = new PointerSteering(stub as unknown as import("phaser").Scene);
+    stub.firePointer("pointerdown", {
+      x: 100,
+      y: 100,
+      worldX: 100,
+      worldY: 100,
+      pointerType: "touch",
+      id: 1,
+    });
+    stub.firePointer("pointermove", {
+      x: 200,
+      y: 100,
+      worldX: 200,
+      worldY: 100,
+      pointerType: "touch",
+      id: 1,
+    });
+    // Secondary finger comes down and lifts. Should NOT release the primary
+    // joystick state.
+    stub.firePointer("pointerdown", {
+      x: 500,
+      y: 500,
+      worldX: 500,
+      worldY: 500,
+      pointerType: "touch",
+      id: 2,
+    });
+    stub.firePointer("pointerup", {
+      x: 500,
+      y: 500,
+      worldX: 500,
+      worldY: 500,
+      pointerType: "touch",
+      id: 2,
+    });
+    let result = { dirX: 0, dirY: 0 };
+    for (let i = 0; i < 125; i++) {
+      result = steer.update(0.016, 0, 0);
+    }
+    // Primary is still active, snake still heading right.
     expect(result.dirX).toBeGreaterThan(0.99);
   });
 });
