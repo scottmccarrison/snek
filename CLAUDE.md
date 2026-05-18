@@ -22,12 +22,11 @@ Browser-based snake.io / slither.io clone. Open a link, drag your finger, eat do
 
 ## Status
 
-**Phase 0 - Scaffolding** (in progress). See [docs/ROADMAP.md](docs/ROADMAP.md) for the 7-phase roadmap. Current state:
+**Phase 1 - Solo snake** (done). **Phase 2 - World + camera + minimap** (next). See [docs/ROADMAP.md](docs/ROADMAP.md) for the 7-phase roadmap.
 
-- [x] 0.1 - Vite + TS + Phaser + Biome scaffold
-- [ ] 0.2 - CLAUDE.md + docs scaffolding (this PR)
-- [ ] 0.3 - GitHub Actions CI
-- [ ] 0.4 - Cloudflare Pages deploy at mccarrison.me/snek
+- [x] Phase 0 - Scaffolding (0.1 + 0.2 + 0.3 + 0.4)
+- [x] Phase 1 - Solo snake (1.1 + 1.2 + 1.3 + 1.4 + 1.5 + 1.6) - shipped 2026-05-18, live at mccarrison.me/snek/
+- [ ] Phase 2 - World + camera + minimap
 
 ## Stack
 
