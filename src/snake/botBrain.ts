@@ -2,7 +2,7 @@ import type { World } from "../sim/world";
 import { tuning } from "../tuning";
 import type { Snake } from "./snake";
 
-export type BotState = "wander" | "seek_food" | "flee";
+export type BotState = "wander" | "seek_food" | "flee" | "hunt";
 
 export interface BotPersonality {
   aggression: number;
@@ -34,6 +34,11 @@ export class BotBrain {
 
   private cachedDecision: { state: BotState; dirX: number; dirY: number } | null = null;
   private cacheFramesRemaining = 0;
+
+  private lastTargetPos: { x: number; y: number } | null = null;
+  private lastTargetSnakeId: string | null = null;
+  private lastTargetMs = 0;
+  private lastThreatDist: number | null = null;
 
   constructor(personality?: BotPersonality) {
     this.personality = personality ?? BotBrain.randomPersonality();
@@ -114,6 +119,12 @@ export class BotBrain {
   ): { dirX: number; dirY: number } {
     this.elapsedMs += dt * 1000;
 
+    // Hunters need per-frame velocity sampling for lead-the-target.
+    // Force re-evaluation regardless of attention cache.
+    if (this.cachedDecision?.state === "hunt") {
+      this.cacheFramesRemaining = 0;
+    }
+
     if (this.cacheFramesRemaining <= 0 || this.cachedDecision === null) {
       this.cachedDecision = this.evaluateState(snake, world, foods, dt);
       const maxCache = Math.round(
@@ -140,7 +151,7 @@ export class BotBrain {
     snake: Snake,
     world: World,
     foods: ReadonlyArray<{ x: number; y: number }>,
-    _dt: number,
+    dt: number,
   ): { state: BotState; dirX: number; dirY: number } {
     const head = snake.segments[0];
 
@@ -173,11 +184,83 @@ export class BotBrain {
       }
     }
     if (nearestThreat) {
-      const dx = head.x - nearestThreat.x;
-      const dy = head.y - nearestThreat.y;
-      const len = Math.hypot(dx, dy) || 1;
-      return { state: "flee", dirX: dx / len, dirY: dy / len };
+      let fleeX = head.x - nearestThreat.x;
+      let fleeY = head.y - nearestThreat.y;
+      const fleeLen = Math.hypot(fleeX, fleeY) || 1;
+      fleeX /= fleeLen;
+      fleeY /= fleeLen;
+
+      const threatDist = Math.sqrt(nearestThreatDistSq);
+      if (
+        this.lastThreatDist !== null &&
+        threatDist < this.lastThreatDist &&
+        threatDist < tuning.bot.curlActivationThreatRange
+      ) {
+        // Closing AND close: curl. Direction is per-bot consistent via driftPhase.
+        // Note: Phaser uses y-down screen coords, so a positive angle in
+        // (cos -sin / sin cos) rotates CLOCKWISE on screen. Both signs are valid.
+        const perpBias = tuning.bot.curlPerpBias * (1 - this.personality.caution);
+        let angle = this.driftPhase < Math.PI ? perpBias : -perpBias;
+
+        // Don't curl into a wall: probe ahead and flip sign if OOB.
+        const lookAhead = 30;
+        const probe = (a: number) => {
+          const c = Math.cos(a);
+          const s = Math.sin(a);
+          const px = head.x + (fleeX * c - fleeY * s) * lookAhead;
+          const py = head.y + (fleeX * s + fleeY * c) * lookAhead;
+          return px > 0 && px < tuning.world.widthPx && py > 0 && py < tuning.world.heightPx;
+        };
+        if (!probe(angle) && probe(-angle)) angle = -angle;
+
+        const cos = Math.cos(angle);
+        const sin = Math.sin(angle);
+        const newX = fleeX * cos - fleeY * sin;
+        const newY = fleeX * sin + fleeY * cos;
+        fleeX = newX;
+        fleeY = newY;
+      }
+      this.lastThreatDist = threatDist;
+      return { state: "flee", dirX: fleeX, dirY: fleeY };
     }
+
+    // Hunt: long aggressive bots actively pursue smaller snakes.
+    if (
+      snake.segments.length >= tuning.bot.huntThresholdLength &&
+      this.personality.aggression >= tuning.bot.huntAggressionThreshold
+    ) {
+      let prey: Snake | null = null;
+      let preyDistSq = Number.POSITIVE_INFINITY;
+      const huntR = tuning.bot.fleeRadiusPx * 2;
+      const huntR2 = huntR * huntR;
+      for (const other of world.snakes.values()) {
+        if (other.id === snake.id) continue;
+        if (other.dead) continue;
+        if (other.segments.length > snake.segments.length * tuning.bot.preyLengthRatio) continue;
+        const oh = other.segments[0];
+        const dx = oh.x - head.x;
+        const dy = oh.y - head.y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < huntR2 && d2 < preyDistSq) {
+          prey = other;
+          preyDistSq = d2;
+        }
+      }
+      if (prey) {
+        const lead = this.leadPosition(prey, head, dt);
+        const ldx = lead.x - head.x;
+        const ldy = lead.y - head.y;
+        const llen = Math.hypot(ldx, ldy) || 1;
+        this.lastThreatDist = null;
+        return { state: "hunt", dirX: ldx / llen, dirY: ldy / llen };
+      }
+      // No prey found - clear lead-tracking state.
+      this.lastTargetSnakeId = null;
+      this.lastTargetPos = null;
+    }
+
+    // Not in flee state - reset threat distance tracking.
+    this.lastThreatDist = null;
 
     // Seek food: density-weighted scoring among forward-hemisphere foods in range.
     const sr = tuning.bot.seekRadiusPx;
@@ -237,6 +320,36 @@ export class BotBrain {
     const dy = this.wanderTarget.y - head.y;
     const len = Math.hypot(dx, dy) || 1;
     return { state: "wander", dirX: dx / len, dirY: dy / len };
+  }
+
+  private leadPosition(
+    prey: Snake,
+    head: { x: number; y: number },
+    dt: number,
+  ): { x: number; y: number } {
+    const preyHead = prey.segments[0];
+    let leadX = preyHead.x;
+    let leadY = preyHead.y;
+    const now = this.elapsedMs;
+    // Velocity sample valid only if we tracked this prey last frame.
+    const sampleFresh =
+      this.lastTargetSnakeId === prey.id &&
+      this.lastTargetPos !== null &&
+      now - this.lastTargetMs <= 2 * dt * 1000;
+    if (sampleFresh && this.lastTargetPos) {
+      const vx = (preyHead.x - this.lastTargetPos.x) / Math.max(dt, 1e-3);
+      const vy = (preyHead.y - this.lastTargetPos.y) / Math.max(dt, 1e-3);
+      const dx = preyHead.x - head.x;
+      const dy = preyHead.y - head.y;
+      const dist = Math.hypot(dx, dy);
+      const t = Math.min(dist / tuning.snake.speedPxPerSec, tuning.bot.leadTimeMs / 1000);
+      leadX = preyHead.x + vx * t;
+      leadY = preyHead.y + vy * t;
+    }
+    this.lastTargetSnakeId = prey.id;
+    this.lastTargetPos = { x: preyHead.x, y: preyHead.y };
+    this.lastTargetMs = now;
+    return { x: leadX, y: leadY };
   }
 
   // internal use only - testing
