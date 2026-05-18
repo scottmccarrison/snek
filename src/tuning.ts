@@ -43,6 +43,17 @@ export interface Tuning {
     driftAngleRad: number;
     driftFrequency: number;
     turnRateRadPerSec: number;
+    personalityRange: {
+      aggression: { min: number; max: number };
+      caution: { min: number; max: number };
+      greed: { min: number; max: number };
+      attention: { min: number; max: number };
+    };
+    cautionFleeRadiusBonus: number;
+    greedClusterWeight: number;
+    attentionCacheFrames: number;
+    wanderCandidates: number;
+    densityRadiusPx: number;
   };
   death: {
     fadeMs: number;
@@ -139,6 +150,17 @@ export const tuning: Tuning = {
     // Lower values produced visible orbits around close-but-off-axis pellets
     // (turn circle larger than the bot's eat radius).
     turnRateRadPerSec: 8,
+    personalityRange: {
+      aggression: { min: 0, max: 1 },
+      caution: { min: 0.2, max: 1 },
+      greed: { min: 0.1, max: 1 },
+      attention: { min: 0.4, max: 1 },
+    },
+    cautionFleeRadiusBonus: 0.5,
+    greedClusterWeight: 2,
+    attentionCacheFrames: 10,
+    wanderCandidates: 4,
+    densityRadiusPx: 80,
   },
   death: {
     fadeMs: 500,
