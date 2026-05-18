@@ -10,6 +10,7 @@ export interface Tuning {
     deadColor: number;
     headRadiusPx: number;
     bodyRadiusPx: number;
+    maxBodyScale: number;
   };
   food: {
     targetCount: number;
@@ -90,6 +91,10 @@ export const tuning: Tuning = {
     deadColor: 0xc62828,
     headRadiusPx: 9,
     bodyRadiusPx: 7,
+    // Cap on length-driven body scaling. Scale formula:
+    //   scale = min(maxBodyScale, 1 + log2(length/initialLength) * 0.5)
+    // At initialLength scale=1.0; doubling length adds 0.5; capped here.
+    maxBodyScale: 3,
   },
   food: {
     targetCount: 2000,

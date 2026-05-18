@@ -57,6 +57,22 @@ export class Snake {
     this.resetWithLength(startX, startY, tuning.snake.initialLength);
   }
 
+  // Visual + collision scale derived from current length. Capped so growth
+  // doesn't run away. At length=initialLength the scale is 1.0; doubling
+  // length adds 0.5 to scale (log2-based), capped at tuning.snake.maxBodyScale.
+  get scale(): number {
+    const ratio = Math.max(1, this.segments.length / tuning.snake.initialLength);
+    return Math.min(tuning.snake.maxBodyScale, 1 + Math.log2(ratio) * 0.5);
+  }
+
+  get headRadius(): number {
+    return tuning.snake.headRadiusPx * this.scale;
+  }
+
+  get bodyRadius(): number {
+    return tuning.snake.bodyRadiusPx * this.scale;
+  }
+
   private resetWithLength(startX: number, startY: number, length: number): void {
     this.dead = false;
     this.killedBy = null;
@@ -156,7 +172,7 @@ export class Snake {
 
   checkSelfCollision(): boolean {
     const head = this.segments[0];
-    const r = tuning.snake.headRadiusPx + tuning.snake.bodyRadiusPx;
+    const r = this.headRadius + this.bodyRadius;
     for (let i = tuning.snake.selfCollisionSkip; i < this.segments.length; i++) {
       const s = this.segments[i];
       const ddx = head.x - s.x;

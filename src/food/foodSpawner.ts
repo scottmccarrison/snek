@@ -65,7 +65,7 @@ export class FoodSpawner {
   }
 
   private collidesWithSnakeBody(x: number, y: number, snake: Snake): boolean {
-    const r = tuning.food.radiusPx + tuning.snake.bodyRadiusPx;
+    const r = tuning.food.radiusPx + snake.bodyRadius;
     const r2 = r * r;
     for (const seg of snake.segments) {
       const dx = seg.x - x;
@@ -97,7 +97,7 @@ export class FoodSpawner {
 
   checkEat(snake: Snake): number {
     const head = snake.segments[0];
-    const r = tuning.snake.headRadiusPx + tuning.food.radiusPx;
+    const r = snake.headRadius + tuning.food.radiusPx;
     const r2 = r * r;
     const candidates = this.hash.queryCircle(head.x, head.y, r);
     let eaten = 0;

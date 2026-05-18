@@ -47,14 +47,19 @@ export class SnakeView {
     const outlineColor = this.options?.outlineColor ?? 0xffffff;
     const outlineAlpha = this.options?.outlineAlpha ?? 0.3;
     const segs = this.snake.segments;
+    const headR = this.snake.headRadius;
+    const bodyR = this.snake.bodyRadius;
+    // Outline grows proportionally with body scale so it stays visible
+    // on bigger snakes.
+    const outlineScaled = outlineExtra * this.snake.scale;
     // Draw from tail to head so head renders on top.
     for (let i = segs.length - 1; i >= 0; i--) {
       const s = segs[i];
       const isHead = i === 0;
-      const radius = isHead ? tuning.snake.headRadiusPx : tuning.snake.bodyRadiusPx;
+      const radius = isHead ? headR : bodyR;
       if (outlineExtra > 0) {
         this.graphics.fillStyle(outlineColor, outlineAlpha);
-        this.graphics.fillCircle(s.x, s.y, radius + outlineExtra);
+        this.graphics.fillCircle(s.x, s.y, radius + outlineScaled);
       }
       this.graphics.fillStyle(isHead ? headColor : bodyColor, 1);
       this.graphics.fillCircle(s.x, s.y, radius);

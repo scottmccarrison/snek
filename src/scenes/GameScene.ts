@@ -172,8 +172,9 @@ export class GameScene extends Phaser.Scene {
     }
     this.foodSpawner.update(this.world);
 
-    // Check self-collision and OOB for player (World handles snake-vs-snake).
-    if (player.checkSelfCollision() || this.isOutOfBounds(player.segments[0])) {
+    // Self-collision is still GameScene's job (World handles snake-vs-snake +
+    // out-of-bounds for all snakes uniformly).
+    if (player.checkSelfCollision()) {
       void this.handleDeath();
       return;
     }
@@ -198,12 +199,6 @@ export class GameScene extends Phaser.Scene {
       this.snakeViews.delete(snakeId);
     }
     this.botManager.handleSnakeDeath(snakeId);
-  }
-
-  private isOutOfBounds(head: { x: number; y: number }): boolean {
-    return (
-      head.x < 0 || head.x > tuning.world.widthPx || head.y < 0 || head.y > tuning.world.heightPx
-    );
   }
 
   private async handleDeath(): Promise<void> {
