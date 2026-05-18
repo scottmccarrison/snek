@@ -108,15 +108,26 @@ export class BotBrain {
       return this.smooth(dx / len, dy / len, dt);
     }
 
-    // Seek food check.
+    // Seek food check. Only target food in the FORWARD hemisphere relative
+    // to the bot's current heading - a pellet just behind the bot is
+    // unreachable at our turn rate (the bot would orbit it forever) and
+    // looks like a stuck bot to a player. If currentDir is not yet set
+    // (very first update), skip seek and fall through to wander.
     let nearestFood: { x: number; y: number } | null = null;
     let nearestFoodDistSq = Number.POSITIVE_INFINITY;
+    const hasHeadingNow = this.currentDirX !== 0 || this.currentDirY !== 0;
     for (const f of foods) {
       const dx = f.x - head.x;
       const dy = f.y - head.y;
       const d2 = dx * dx + dy * dy;
       const sr = tuning.bot.seekRadiusPx;
-      if (d2 < sr * sr && d2 < nearestFoodDistSq) {
+      if (d2 >= sr * sr) continue;
+      if (hasHeadingNow) {
+        // Dot with heading: positive means in front of the bot.
+        const alignment = dx * this.currentDirX + dy * this.currentDirY;
+        if (alignment <= 0) continue;
+      }
+      if (d2 < nearestFoodDistSq) {
         nearestFood = f;
         nearestFoodDistSq = d2;
       }

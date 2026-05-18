@@ -133,9 +133,12 @@ export const tuning: Tuning = {
     // tuning.snake.turnRateRadPerSec. Player's value smooths their joystick
     // input; bots smooth their FSM-target heading via this value so target
     // changes (e.g., switching to a closer pellet) play out as gradual
-    // turns rather than instant body kinks. 5 rad/s = ~286 deg/s = ~0.3s
-    // to make a 90deg turn, which reads as "slightly sluggish bot".
-    turnRateRadPerSec: 5,
+    // turns rather than instant body kinks.
+    //
+    // 8 rad/s = ~458 deg/s. Turning radius = speed/turnRate = 180/8 = 22.5px.
+    // Lower values produced visible orbits around close-but-off-axis pellets
+    // (turn circle larger than the bot's eat radius).
+    turnRateRadPerSec: 8,
   },
   death: {
     fadeMs: 500,
