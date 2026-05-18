@@ -23,6 +23,7 @@ export class World {
       if (snake.dead) continue;
       snake.update(dt);
     }
+    this.checkOutOfBounds();
     this.checkSnakeVsSnake();
   }
 
@@ -31,12 +32,29 @@ export class World {
     this.checkSnakeVsSnake();
   }
 
+  /**
+   * Kill any snake whose head crossed the world rect. Previously only the
+   * player got this check (in GameScene); bots could wander off-world and
+   * become unreachable. Now all snakes die at the edge uniformly. Events
+   * fire after the pass so listeners can clean up.
+   */
+  private checkOutOfBounds(): void {
+    const deaths: string[] = [];
+    for (const snake of this.snakes.values()) {
+      if (snake.dead) continue;
+      const h = snake.segments[0];
+      if (h.x < 0 || h.x > tuning.world.widthPx || h.y < 0 || h.y > tuning.world.heightPx) {
+        snake.die();
+        deaths.push(snake.id);
+      }
+    }
+    for (const id of deaths) this.events.onSnakeDied(id, null);
+  }
+
   private checkSnakeVsSnake(): void {
     // Snapshot alive list before any kills - all snakes are still "alive" for
     // the duration of this pass so mutual kills both register in the same frame.
     const alive = Array.from(this.snakes.values()).filter((s) => !s.dead);
-    const r = tuning.snake.headRadiusPx + tuning.snake.bodyRadiusPx;
-    const r2 = r * r;
     // Collect pending deaths without calling die() yet, so A's death does not
     // prevent B from also dying when both heads land on the other's body.
     const pendingDeaths = new Map<string, string | null>(); // snakeId -> killedBy
@@ -45,6 +63,9 @@ export class World {
       const h = head.segments[0];
       for (const other of alive) {
         if (other.id === head.id) continue;
+        // Collision radius scales per-snake. Bigger snake = wider hitbox.
+        const r = head.headRadius + other.bodyRadius;
+        const r2 = r * r;
         for (let i = 1; i < other.segments.length; i++) {
           const s = other.segments[i];
           const dx = h.x - s.x;
