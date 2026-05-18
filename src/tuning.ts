@@ -39,6 +39,8 @@ export interface Tuning {
     playerOutlineColor: number;
     playerOutlineAlpha: number;
     minimapDotAlpha: number;
+    driftAngleRad: number;
+    driftFrequency: number;
   };
   death: {
     fadeMs: number;
@@ -116,6 +118,11 @@ export const tuning: Tuning = {
     playerOutlineColor: 0xffffff,
     playerOutlineAlpha: 0.3,
     minimapDotAlpha: 0.7,
+    // Smooth sine drift applied to seek_food and wander headings so bots
+    // don't head laser-straight at every pellet. 0.4rad = ~23deg max sway,
+    // 0.003 rad/ms = ~2.1s per oscillation cycle.
+    driftAngleRad: 0.4,
+    driftFrequency: 0.003,
   },
   death: {
     fadeMs: 500,
