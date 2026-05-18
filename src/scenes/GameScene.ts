@@ -7,6 +7,7 @@ import { World } from "../sim/world";
 import { Snake } from "../snake/snake";
 import { SnakeView } from "../snake/snakeView";
 import { tuning } from "../tuning";
+import { JoystickIndicator } from "../ui/joystickIndicator";
 import { Minimap } from "../ui/minimap";
 
 export class GameScene extends Phaser.Scene {
@@ -14,6 +15,7 @@ export class GameScene extends Phaser.Scene {
   private botManager!: BotManager;
   private snakeViews: Map<string, SnakeView> = new Map();
   private steering!: PointerSteering;
+  private joystick!: JoystickIndicator;
   private foodHash!: SpatialHash<FoodItem>;
   private foodSpawner!: FoodSpawner;
   private minimap!: Minimap;
@@ -110,8 +112,15 @@ export class GameScene extends Phaser.Scene {
     // Construct minimap first so the steering callback can reference it.
     this.minimap = new Minimap(this);
 
-    this.steering = new PointerSteering(this, (screenX, screenY) =>
-      this.minimap.hitsMinimap(screenX, screenY),
+    this.joystick = new JoystickIndicator(this);
+    this.steering = new PointerSteering(
+      this,
+      (screenX, screenY) => this.minimap.hitsMinimap(screenX, screenY),
+      {
+        onTouchStart: (sx, sy) => this.joystick.show(sx, sy),
+        onTouchMove: (sx, sy) => this.joystick.updateStick(sx, sy),
+        onTouchEnd: () => this.joystick.hide(),
+      },
     );
 
     this.foodHash = new SpatialHash<FoodItem>(tuning.world.spatialBucketPx);
@@ -229,6 +238,7 @@ export class GameScene extends Phaser.Scene {
     }
     this.snakeViews.clear();
     this.steering.destroy();
+    this.joystick.destroy();
     this.foodSpawner.destroy();
     this.foodHash.clear();
     this.minimap.destroy();

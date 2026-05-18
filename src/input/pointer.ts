@@ -20,33 +20,94 @@ export interface SteerOutput {
   dirY: number;
 }
 
+export interface PointerSteeringOpts {
+  onTouchStart?: (screenX: number, screenY: number) => void;
+  onTouchMove?: (screenX: number, screenY: number) => void;
+  onTouchEnd?: () => void;
+}
+
 export class PointerSteering {
-  private lastPointerX = 0;
-  private lastPointerY = 0;
-  private hasPointer = false;
+  private mouseLastWorldX = 0;
+  private mouseLastWorldY = 0;
+  private hasMousePointer = false;
+  private touchAnchorX = 0;
+  private touchAnchorY = 0;
+  private touchCurrentX = 0;
+  private touchCurrentY = 0;
+  private touchDragging = false;
+  // ID of the touch pointer currently driving the joystick. Secondary
+  // touches (palm contact, second finger) are ignored - we only honor
+  // the first touchdown until that pointer lifts. Prevents accidental
+  // multi-touch from stealing the anchor or releasing it early.
+  private activeTouchId: number | null = null;
   private currentDirX = 0;
   private currentDirY = 0;
   private hasInput = false;
   private arrows: Phaser.Types.Input.Keyboard.CursorKeys | null = null;
   private pointerDownHandler: (p: Phaser.Input.Pointer) => void;
   private pointerMoveHandler: (p: Phaser.Input.Pointer) => void;
+  private pointerUpHandler: (p: Phaser.Input.Pointer) => void;
+  private opts: PointerSteeringOpts;
 
   constructor(
     private scene: Phaser.Scene,
     private shouldIgnore: ((screenX: number, screenY: number) => boolean) | null = null,
+    opts: PointerSteeringOpts = {},
   ) {
-    this.pointerDownHandler = (p) => this.onPointer(p);
-    this.pointerMoveHandler = (p) => this.onPointer(p);
+    this.opts = opts;
+    this.pointerDownHandler = (p) => this.onPointerDown(p);
+    this.pointerMoveHandler = (p) => this.onPointerMove(p);
+    this.pointerUpHandler = (p) => this.onPointerUp(p);
     scene.input.on("pointerdown", this.pointerDownHandler);
     scene.input.on("pointermove", this.pointerMoveHandler);
+    scene.input.on("pointerup", this.pointerUpHandler);
     this.arrows = scene.input.keyboard?.createCursorKeys() ?? null;
   }
 
-  private onPointer(p: Phaser.Input.Pointer): void {
+  private onPointerDown(p: Phaser.Input.Pointer): void {
     if (this.shouldIgnore?.(p.x, p.y)) return;
-    this.lastPointerX = p.worldX;
-    this.lastPointerY = p.worldY;
-    this.hasPointer = true;
+    if (!p.wasTouch) {
+      this.mouseLastWorldX = p.worldX;
+      this.mouseLastWorldY = p.worldY;
+      this.hasMousePointer = true;
+    } else {
+      // Only honor the FIRST touch. Secondary touches are ignored until
+      // the active one lifts.
+      if (this.activeTouchId !== null) return;
+      this.activeTouchId = p.id;
+      this.touchAnchorX = p.x;
+      this.touchAnchorY = p.y;
+      this.touchCurrentX = p.x;
+      this.touchCurrentY = p.y;
+      this.touchDragging = true;
+      this.opts.onTouchStart?.(p.x, p.y);
+    }
+  }
+
+  private onPointerMove(p: Phaser.Input.Pointer): void {
+    if (!p.wasTouch) {
+      if (this.shouldIgnore?.(p.x, p.y)) return;
+      this.mouseLastWorldX = p.worldX;
+      this.mouseLastWorldY = p.worldY;
+      this.hasMousePointer = true;
+    } else {
+      // Ignore moves from any pointer other than the active one.
+      if (p.id !== this.activeTouchId) return;
+      if (!this.touchDragging) return;
+      this.touchCurrentX = p.x;
+      this.touchCurrentY = p.y;
+      this.opts.onTouchMove?.(p.x, p.y);
+    }
+  }
+
+  private onPointerUp(p: Phaser.Input.Pointer): void {
+    if (!p.wasTouch) return;
+    // Only the ACTIVE touch lifting releases the joystick. Lifting a
+    // secondary finger does not stop steering with the primary thumb.
+    if (p.id !== this.activeTouchId) return;
+    this.activeTouchId = null;
+    this.touchDragging = false;
+    this.opts.onTouchEnd?.();
   }
 
   private readArrows(): { x: number; y: number } | null {
@@ -66,14 +127,24 @@ export class PointerSteering {
     let targetDirX = 0;
     let targetDirY = 0;
     let gotTarget = false;
+
     const arrow = this.readArrows();
     if (arrow) {
       targetDirX = arrow.x;
       targetDirY = arrow.y;
       gotTarget = true;
-    } else if (this.hasPointer) {
-      const dx = this.lastPointerX - headX;
-      const dy = this.lastPointerY - headY;
+    } else if (this.touchDragging) {
+      const dx = this.touchCurrentX - this.touchAnchorX;
+      const dy = this.touchCurrentY - this.touchAnchorY;
+      const len = Math.hypot(dx, dy);
+      if (len > tuning.joystick.minDragPx) {
+        targetDirX = dx / len;
+        targetDirY = dy / len;
+        gotTarget = true;
+      }
+    } else if (this.hasMousePointer) {
+      const dx = this.mouseLastWorldX - headX;
+      const dy = this.mouseLastWorldY - headY;
       const len = Math.hypot(dx, dy);
       if (len > 1e-3) {
         targetDirX = dx / len;
@@ -81,9 +152,11 @@ export class PointerSteering {
         gotTarget = true;
       }
     }
+
     if (!gotTarget && !this.hasInput) return { dirX: 0, dirY: 0 };
     if (gotTarget) this.hasInput = true;
     if (!gotTarget) return { dirX: this.currentDirX, dirY: this.currentDirY };
+
     if (this.currentDirX === 0 && this.currentDirY === 0) {
       this.currentDirX = targetDirX;
       this.currentDirY = targetDirY;
@@ -105,5 +178,6 @@ export class PointerSteering {
   destroy(): void {
     this.scene.input.off("pointerdown", this.pointerDownHandler);
     this.scene.input.off("pointermove", this.pointerMoveHandler);
+    this.scene.input.off("pointerup", this.pointerUpHandler);
   }
 }
