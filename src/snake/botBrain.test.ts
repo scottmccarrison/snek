@@ -248,4 +248,141 @@ describe("BotBrain", () => {
     brain.update(bot, world, noFoods, 1 / 60);
     expect(brain.debugCachedState).toBe("wander");
   });
+
+  it("hunt state triggers when bot is long enough and aggressive enough", () => {
+    // Long hunter (length >= 25) with aggression >= 0.6 should hunt nearby prey.
+    // Prey placed at x=950 (distance 450) so it's within huntR (fleeRadiusPx*2=500)
+    // but all prey segments are outside flee radius (effectiveFleeR=312.5 for caution=0.5).
+    const hunterBrain = new BotBrain({
+      aggression: 1.0,
+      caution: 0.5,
+      greed: 0.5,
+      attention: 1.0,
+    });
+    const hunter = new Snake(500, 500, { id: "hunter", ownerType: "bot", initialLength: 50 });
+    const prey = new Snake(950, 500, { id: "prey", ownerType: "bot", initialLength: 15 });
+    const world = makeWorld();
+    world.addSnake(hunter);
+    world.addSnake(prey);
+
+    hunterBrain.update(hunter, world, [], 1 / 60);
+    expect(hunterBrain.debugCachedState).toBe("hunt");
+  });
+
+  it("hunt state does NOT trigger if bot is too short", () => {
+    // Bot length=10 < huntThresholdLength=25 - hunt branch is never entered.
+    const brain = new BotBrain({
+      aggression: 1.0,
+      caution: 0.5,
+      greed: 0.5,
+      attention: 1.0,
+    });
+    const shortHunter = new Snake(500, 500, { id: "h", ownerType: "bot", initialLength: 10 });
+    // Prey nearby (may trigger flee, that's fine - just must not be "hunt").
+    const prey = new Snake(900, 500, { id: "p", ownerType: "bot", initialLength: 5 });
+    const world = makeWorld();
+    world.addSnake(shortHunter);
+    world.addSnake(prey);
+
+    brain.update(shortHunter, world, [], 1 / 60);
+    expect(brain.debugCachedState).not.toBe("hunt");
+  });
+
+  it("hunt state does NOT trigger if bot is timid", () => {
+    // Aggression=0.1 < huntAggressionThreshold=0.6 - hunt branch is skipped.
+    const timidBrain = new BotBrain({
+      aggression: 0.1,
+      caution: 0.5,
+      greed: 0.5,
+      attention: 1.0,
+    });
+    const longTimid = new Snake(500, 500, { id: "t", ownerType: "bot", initialLength: 50 });
+    // Prey nearby (may trigger flee, that's fine - just must not be "hunt").
+    const prey = new Snake(900, 500, { id: "p", ownerType: "bot", initialLength: 15 });
+    const world = makeWorld();
+    world.addSnake(longTimid);
+    world.addSnake(prey);
+
+    timidBrain.update(longTimid, world, [], 1 / 60);
+    expect(timidBrain.debugCachedState).not.toBe("hunt");
+  });
+
+  it("lead-the-target aims ahead of moving prey", () => {
+    // Hunter at (500,500); prey starts at (950,500), within huntR (500) but outside
+    // flee radius so the hunt branch fires (not flee).
+    // After two updates (so velocity is sampled), the hunt direction should
+    // aim with a non-trivial dirX component pointing toward prey (to the right).
+    const hunterBrain = new BotBrain({
+      aggression: 1.0,
+      caution: 0.5,
+      greed: 0.5,
+      attention: 1.0,
+    });
+    const hunter = new Snake(500, 500, { id: "h", ownerType: "bot", initialLength: 50 });
+    const prey = new Snake(950, 500, { id: "p", ownerType: "bot", initialLength: 15 });
+    const world = makeWorld();
+    world.addSnake(hunter);
+    world.addSnake(prey);
+
+    // Frame 1: velocity sample empty (lastTargetPos=null), leadPosition returns prey head.
+    hunterBrain.update(hunter, world, [], 1 / 60);
+    const dirAfterFirst = hunterBrain.debugCachedDir;
+    expect(hunterBrain.debugCachedState).toBe("hunt");
+
+    // Move prey head +30px right (simulating rightward motion).
+    prey.segments[0].x += 30;
+
+    // Frame 2: velocity sample is fresh, lead is computed ahead of prey.
+    hunterBrain.update(hunter, world, [], 1 / 60);
+    const dirAfterSecond = hunterBrain.debugCachedDir;
+    expect(hunterBrain.debugCachedState).toBe("hunt");
+
+    // Both frames: bot aimed rightward (toward prey). dirX strongly positive.
+    expect(dirAfterFirst?.dirX).toBeGreaterThan(0.9);
+    expect(dirAfterSecond?.dirX).toBeGreaterThan(0.9);
+  });
+
+  it("defensive curl rotates the flee vector when threat is closing", () => {
+    // Two-threat geometry to work with the forward-hemisphere filter.
+    //
+    // Frame 1: threat1 at (300,500) to the LEFT (dist=200). No heading yet on first call.
+    //   Flee fires to the RIGHT (+x). lastThreatDist=200. dirY=0 (straight flee).
+    //
+    // Frame 2: bot heading is RIGHT. threat1 is now BEHIND (to left of rightward heading).
+    //   threat2 appears at (640,500) to the RIGHT of bot (dist=140). Alignment with
+    //   rightward heading: dx=+140, headingX=+1 -> alignment=+140 > 0. IN FRONT. Flee fires.
+    //   dist=140 < lastThreatDist=200 (closing). 140 < curlActivationThreatRange=150. Curl fires!
+    const brain = new BotBrain({
+      aggression: 0.5,
+      caution: 0.2, // low caution -> harder curl
+      greed: 0.5,
+      attention: 1.0,
+    });
+    const bot = new Snake(500, 500, { id: "b", ownerType: "bot", initialLength: 5 });
+    // threat1: to the LEFT, fires first flee rightward.
+    const threat1 = new Snake(300, 500, { id: "t1", ownerType: "bot", initialLength: 1 });
+    // threat2: to the RIGHT, closes in on frame 2 while bot is heading right.
+    const threat2 = new Snake(640, 500, { id: "t2", ownerType: "bot", initialLength: 1 });
+    const world = makeWorld();
+    world.addSnake(bot);
+    world.addSnake(threat1);
+
+    // Frame 1: only threat1 in world. No heading -> flee from threat1 at left -> flee RIGHT.
+    // lastThreatDist = 200. dirY = 0 (straight flee, no curl on first flee call).
+    brain.update(bot, world, [], 1 / 60);
+    expect(brain.debugCachedState).toBe("flee");
+    const dirAfterFirst = brain.debugCachedDir;
+    // First flee: no prior threatDist -> no curl. Straight flee.
+    expect(Math.abs(dirAfterFirst?.dirY ?? 0)).toBeLessThan(0.1);
+
+    // Frame 2: add threat2 to the right at distance 140.
+    // threat1 is now behind (left, heading is right). threat2 is in front (right).
+    // dist=140 < lastThreatDist=200 AND < curlActivationThreatRange=150 -> curl fires.
+    world.addSnake(threat2);
+    brain.update(bot, world, [], 1 / 60);
+    expect(brain.debugCachedState).toBe("flee");
+    const dirAfterSecond = brain.debugCachedDir;
+    // Curl fires: direction has a perpendicular (Y) component.
+    expect(Math.abs(dirAfterSecond?.dirY ?? 0)).toBeGreaterThan(0.1);
+  });
 });

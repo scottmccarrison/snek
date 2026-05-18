@@ -54,6 +54,12 @@ export interface Tuning {
     attentionCacheFrames: number;
     wanderCandidates: number;
     densityRadiusPx: number;
+    huntThresholdLength: number;
+    huntAggressionThreshold: number;
+    preyLengthRatio: number;
+    leadTimeMs: number;
+    curlPerpBias: number;
+    curlActivationThreatRange: number;
   };
   death: {
     fadeMs: number;
@@ -161,6 +167,12 @@ export const tuning: Tuning = {
     attentionCacheFrames: 10,
     wanderCandidates: 4,
     densityRadiusPx: 80,
+    huntThresholdLength: 25,
+    huntAggressionThreshold: 0.6,
+    preyLengthRatio: 0.7,
+    leadTimeMs: 500,
+    curlPerpBias: 0.6,
+    curlActivationThreatRange: 150,
   },
   death: {
     fadeMs: 500,
