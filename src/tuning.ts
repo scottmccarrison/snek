@@ -41,6 +41,7 @@ export interface Tuning {
     minimapDotAlpha: number;
     driftAngleRad: number;
     driftFrequency: number;
+    turnRateRadPerSec: number;
   };
   death: {
     fadeMs: number;
@@ -123,6 +124,13 @@ export const tuning: Tuning = {
     // 0.003 rad/ms = ~2.1s per oscillation cycle.
     driftAngleRad: 0.8,
     driftFrequency: 0.003,
+    // Bot turn rate is SEPARATE from (and slower than) the player's
+    // tuning.snake.turnRateRadPerSec. Player's value smooths their joystick
+    // input; bots smooth their FSM-target heading via this value so target
+    // changes (e.g., switching to a closer pellet) play out as gradual
+    // turns rather than instant body kinks. 5 rad/s = ~286 deg/s = ~0.3s
+    // to make a 90deg turn, which reads as "slightly sluggish bot".
+    turnRateRadPerSec: 5,
   },
   death: {
     fadeMs: 500,
