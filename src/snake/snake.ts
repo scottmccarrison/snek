@@ -15,38 +15,69 @@ export interface SnakeSegment {
   y: number;
 }
 
+export interface SnakeConfig {
+  id: string;
+  ownerType: "player" | "bot";
+  color: number;
+  startX: number;
+  startY: number;
+  initialLength?: number;
+}
+
 export class Snake {
+  readonly id: string;
+  readonly ownerType: "player" | "bot";
+  readonly color: number;
   readonly segments: SnakeSegment[];
   growth: number;
   dead: boolean;
+  killedBy: string | null = null;
+  pendingDirX = 0;
+  pendingDirY = 0;
 
   private headPath: { x: number; y: number }[];
 
-  constructor(startX: number, startY: number) {
+  constructor(
+    startX: number,
+    startY: number,
+    config?: Partial<Omit<SnakeConfig, "startX" | "startY">>,
+  ) {
+    this.id = config?.id ?? "player";
+    this.ownerType = config?.ownerType ?? "player";
+    this.color = config?.color ?? tuning.snake.headColor;
     this.headPath = [];
     this.segments = [];
     this.growth = 0;
     this.dead = false;
-    this.reset(startX, startY);
+    const len = config?.initialLength ?? tuning.snake.initialLength;
+    this.resetWithLength(startX, startY, len);
   }
 
   reset(startX: number, startY: number): void {
+    this.resetWithLength(startX, startY, tuning.snake.initialLength);
+  }
+
+  private resetWithLength(startX: number, startY: number, length: number): void {
     this.dead = false;
+    this.killedBy = null;
     this.growth = 0;
-    // Clear and repopulate in place so `readonly segments` reference stays valid.
+    this.pendingDirX = 0;
+    this.pendingDirY = 0;
     this.segments.length = 0;
-    for (let i = 0; i < tuning.snake.initialLength; i++) {
+    for (let i = 0; i < length; i++) {
       this.segments.push({ x: startX - i * tuning.snake.spacingPx, y: startY });
     }
     this.headPath = this.segments.map((s) => ({ x: s.x, y: s.y }));
   }
 
-  update(dt: number, dirX: number, dirY: number): void {
+  update(dt: number, dirX?: number, dirY?: number): void {
     if (this.dead) return;
 
+    // Use explicit args if provided, else fall back to pendingDir, else derive from heading.
+    let dx = dirX ?? this.pendingDirX;
+    let dy = dirY ?? this.pendingDirY;
+
     // If no input, continue current heading derived from head - next segment.
-    let dx = dirX;
-    let dy = dirY;
     if (dx === 0 && dy === 0) {
       const head = this.segments[0];
       const next = this.segments[1] ?? head;
@@ -135,7 +166,9 @@ export class Snake {
     return false;
   }
 
-  die(): void {
+  die(killedBy?: string): void {
+    if (this.dead) return;
     this.dead = true;
+    this.killedBy = killedBy ?? null;
   }
 }

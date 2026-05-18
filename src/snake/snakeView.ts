@@ -7,44 +7,57 @@
 import { tuning } from "../tuning";
 import type { Snake } from "./snake";
 
+export interface SnakeViewOptions {
+  outlineExtraPx?: number;
+  outlineColor?: number;
+  outlineAlpha?: number;
+}
+
 export class SnakeView {
   private graphics: Phaser.GameObjects.Graphics;
   private snake: Snake;
   private scene: Phaser.Scene;
   private fadeFraction: number;
+  private options: SnakeViewOptions | undefined;
 
-  constructor(scene: Phaser.Scene, snake: Snake) {
+  constructor(scene: Phaser.Scene, snake: Snake, options?: SnakeViewOptions) {
     this.scene = scene;
     this.snake = snake;
+    this.options = options;
     this.fadeFraction = 0;
     this.graphics = scene.add.graphics();
   }
 
+  private darken(color: number, factor: number): number {
+    const r = ((color >> 16) & 0xff) * factor;
+    const g = ((color >> 8) & 0xff) * factor;
+    const b = (color & 0xff) * factor;
+    return (Math.round(r) << 16) | (Math.round(g) << 8) | Math.round(b);
+  }
+
   render(): void {
     this.graphics.clear();
+    const headColor = this.lerpColor(this.snake.color, tuning.snake.deadColor, this.fadeFraction);
+    const bodyColor = this.lerpColor(
+      this.darken(this.snake.color, 0.7),
+      tuning.snake.deadColor,
+      this.fadeFraction,
+    );
+    const outlineExtra = this.options?.outlineExtraPx ?? 0;
+    const outlineColor = this.options?.outlineColor ?? 0xffffff;
+    const outlineAlpha = this.options?.outlineAlpha ?? 0.3;
     const segs = this.snake.segments;
     // Draw from tail to head so head renders on top.
     for (let i = segs.length - 1; i >= 0; i--) {
       const s = segs[i];
-      if (i === 0) {
-        // Head segment.
-        const color = this.lerpColor(
-          tuning.snake.headColor,
-          tuning.snake.deadColor,
-          this.fadeFraction,
-        );
-        this.graphics.fillStyle(color);
-        this.graphics.fillCircle(s.x, s.y, tuning.snake.headRadiusPx);
-      } else {
-        // Body segment.
-        const color = this.lerpColor(
-          tuning.snake.bodyColor,
-          tuning.snake.deadColor,
-          this.fadeFraction,
-        );
-        this.graphics.fillStyle(color);
-        this.graphics.fillCircle(s.x, s.y, tuning.snake.bodyRadiusPx);
+      const isHead = i === 0;
+      const radius = isHead ? tuning.snake.headRadiusPx : tuning.snake.bodyRadiusPx;
+      if (outlineExtra > 0) {
+        this.graphics.fillStyle(outlineColor, outlineAlpha);
+        this.graphics.fillCircle(s.x, s.y, radius + outlineExtra);
       }
+      this.graphics.fillStyle(isHead ? headColor : bodyColor, 1);
+      this.graphics.fillCircle(s.x, s.y, radius);
     }
   }
 
