@@ -11,7 +11,7 @@ Solo + bots first (Phases 0-4), then multiplayer (Phases 5-7). The game is "fun"
 | 0 | Scaffolding (Vite, Phaser, Biome, CI, deploy stub) | Done | - | (Phase 0 ships as 4 small PRs; no separate plan doc) |
 | 1 | Solo snake on single screen | Done | [#15](https://github.com/scottmccarrison/snek/pull/15) | [phase-1-solo-snake.md](plans/phase-1-solo-snake.md) |
 | 2 | Larger world + camera + minimap | Done | [#23](https://github.com/scottmccarrison/snek/pull/23) | [phase-2-world-camera.md](plans/phase-2-world-camera.md) |
-| 3 | Bot snakes (FSM AI, snake-vs-snake, death-to-pellets) | Todo | - | - |
+| 3 | Bot snakes (FSM AI, snake-vs-snake, death-to-pellets) | Done | [#31](https://github.com/scottmccarrison/snek/pull/31) | [phase-3-bots.md](plans/phase-3-bots.md) |
 | 4 | Polish + feel (boost, HUD, death screen, audio, mobile touch) | Todo | - | - |
 | 5 | MP foundation (CF Worker + DO + 20Hz tick + WS protocol + reconnect) | Todo | - | - |
 | 6 | MP correctness (prediction, interpolation, lag comp, viewport culling, binary decision) | Todo | - | - |
