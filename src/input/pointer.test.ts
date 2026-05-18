@@ -33,8 +33,16 @@ function createSceneStub() {
   return {
     input,
     cursors,
-    firePointer: (event: "pointerdown" | "pointermove", p: { worldX: number; worldY: number }) =>
-      input.emit(event, p),
+    firePointer: (
+      event: "pointerdown" | "pointermove" | "pointerup",
+      p: { worldX: number; worldY: number; x?: number; y?: number; pointerType?: string },
+    ) =>
+      input.emit(event, {
+        ...p,
+        wasTouch: (p.pointerType ?? "mouse") !== "mouse",
+        x: p.x ?? 0,
+        y: p.y ?? 0,
+      }),
   };
 }
 
@@ -93,6 +101,106 @@ describe("PointerSteering", () => {
     const stub = createSceneStub();
     const steering = new PointerSteering(stub as unknown as import("phaser").Scene);
     steering.destroy();
-    expect(stub.input.off).toHaveBeenCalledTimes(2);
+    expect(stub.input.off).toHaveBeenCalledTimes(3);
+  });
+
+  it("touch input: drag right of anchor produces dirX > 0.99", () => {
+    const stub = createSceneStub();
+    const steer = new PointerSteering(stub as unknown as import("phaser").Scene);
+    stub.firePointer("pointerdown", {
+      x: 100,
+      y: 100,
+      worldX: 100,
+      worldY: 100,
+      pointerType: "touch",
+    });
+    stub.firePointer("pointermove", {
+      x: 200,
+      y: 100,
+      worldX: 200,
+      worldY: 100,
+      pointerType: "touch",
+    });
+    let result = { dirX: 0, dirY: 0 };
+    for (let i = 0; i < 125; i++) {
+      result = steer.update(0.016, 0, 0);
+    }
+    expect(result.dirX).toBeGreaterThan(0.99);
+    expect(Math.abs(result.dirY)).toBeLessThan(1e-3);
+  });
+
+  it("touch input: lift finger preserves last direction", () => {
+    const stub = createSceneStub();
+    const steer = new PointerSteering(stub as unknown as import("phaser").Scene);
+    stub.firePointer("pointerdown", {
+      x: 100,
+      y: 100,
+      worldX: 100,
+      worldY: 100,
+      pointerType: "touch",
+    });
+    stub.firePointer("pointermove", {
+      x: 200,
+      y: 100,
+      worldX: 200,
+      worldY: 100,
+      pointerType: "touch",
+    });
+    for (let i = 0; i < 125; i++) steer.update(0.016, 0, 0);
+    stub.firePointer("pointerup", {
+      x: 200,
+      y: 100,
+      worldX: 200,
+      worldY: 100,
+      pointerType: "touch",
+    });
+    let result = { dirX: 0, dirY: 0 };
+    for (let i = 0; i < 60; i++) {
+      result = steer.update(0.016, 0, 0);
+    }
+    expect(result.dirX).toBeGreaterThan(0.99);
+  });
+
+  it("touch input: minimap region rejects new touchdown anchor", () => {
+    const stub = createSceneStub();
+    const steer = new PointerSteering(stub as unknown as import("phaser").Scene, (sx) => sx > 800);
+    stub.firePointer("pointerdown", {
+      x: 900,
+      y: 500,
+      worldX: 900,
+      worldY: 500,
+      pointerType: "touch",
+    });
+    let result = steer.update(0.016, 0, 0);
+    expect(result.dirX).toBe(0);
+    expect(result.dirY).toBe(0);
+    // Outside region: should work
+    stub.firePointer("pointerdown", {
+      x: 100,
+      y: 100,
+      worldX: 100,
+      worldY: 100,
+      pointerType: "touch",
+    });
+    stub.firePointer("pointermove", {
+      x: 200,
+      y: 100,
+      worldX: 200,
+      worldY: 100,
+      pointerType: "touch",
+    });
+    for (let i = 0; i < 125; i++) result = steer.update(0.016, 0, 0);
+    expect(result.dirX).toBeGreaterThan(0.99);
+  });
+
+  it("mouse path unchanged when pointerType is mouse", () => {
+    const stub = createSceneStub();
+    const steer = new PointerSteering(stub as unknown as import("phaser").Scene);
+    stub.firePointer("pointerdown", { x: 0, y: 0, worldX: 100, worldY: 0, pointerType: "mouse" });
+    let result = { dirX: 0, dirY: 0 };
+    for (let i = 0; i < 125; i++) {
+      result = steer.update(0.016, 0, 0);
+    }
+    expect(result.dirX).toBeGreaterThan(0.99);
   });
 });

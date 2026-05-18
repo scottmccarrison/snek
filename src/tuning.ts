@@ -66,6 +66,13 @@ export interface Tuning {
     bgAlpha: number;
     borderColor: number;
   };
+  joystick: {
+    anchorRadiusPx: number;
+    stickRadiusPx: number;
+    minDragPx: number;
+    color: number;
+    alpha: number;
+  };
 }
 
 export const tuning: Tuning = {
@@ -135,5 +142,12 @@ export const tuning: Tuning = {
     bgColor: 0x0b0b0f,
     bgAlpha: 0.55,
     borderColor: 0x88ddff,
+  },
+  joystick: {
+    anchorRadiusPx: 50,
+    stickRadiusPx: 12,
+    minDragPx: 8,
+    color: 0xffffff,
+    alpha: 0.4,
   },
 };
