@@ -1,0 +1,20 @@
+name = "snek-api"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+routes = [
+  { pattern = "mccarrison.me/snek", zone_name = "mccarrison.me" },
+  { pattern = "mccarrison.me/snek/*", zone_name = "mccarrison.me" },
+]
+
+[vars]
+PATH_PREFIX = "/snek"
+DEBUG_LOG = "1"
+
+[assets]
+directory = "../dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+
+# Durable Object + migration blocks land in Phase 5 (MP foundation).
+# Worker is asset-only until then.
