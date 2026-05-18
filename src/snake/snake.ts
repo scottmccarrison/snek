@@ -172,8 +172,23 @@ export class Snake {
 
   checkSelfCollision(): boolean {
     const head = this.segments[0];
-    const r = this.headRadius + this.bodyRadius;
-    for (let i = tuning.snake.selfCollisionSkip; i < this.segments.length; i++) {
+    // bodyRadius * 0.5 (not head+body radii): during tight turns the head is
+    // visually "inside" the body chain, which should not be a death. Self-
+    // death needs a clear head-body overlap, not a brushing of outer rings.
+    const r = this.bodyRadius * 0.5;
+    // Skip a full turning-circle worth of segments past the base skip.
+    // Rationale: in a tight turn the body curves through a circle of
+    // diameter ~2 * speed / turnRate. Segments along that arc can be
+    // arbitrarily close to the head (the wraparound point sits ~13 segments
+    // back at current tuning). Padding the skip by the segments-per-turn
+    // means a single sharp turn can't put a "near-head" body segment inside
+    // the hitbox. Sustained spinning (multiple full rotations) is still
+    // catchable as a real self-bite, since that geometry truly is a self-
+    // crossing.
+    const turnRadius = tuning.snake.speedPxPerSec / tuning.snake.turnRateRadPerSec;
+    const segmentsPerTurn = Math.ceil((2 * Math.PI * turnRadius) / tuning.snake.spacingPx);
+    const dynamicSkip = tuning.snake.selfCollisionSkip + segmentsPerTurn;
+    for (let i = dynamicSkip; i < this.segments.length; i++) {
       const s = this.segments[i];
       const ddx = head.x - s.x;
       const ddy = head.y - s.y;

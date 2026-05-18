@@ -56,15 +56,15 @@ describe("Snake", () => {
 
   it("checkSelfCollision returns true when head wraps into body", () => {
     const snake = new Snake(100, 100);
-    // Ensure there are enough segments past selfCollisionSkip.
-    // initialLength=8, selfCollisionSkip=6, so idx=8 is out of bounds.
-    // Add extra segments via grow, then run enough frames to consume growth.
-    snake.grow(4);
+    // The dynamic skip is roughly selfCollisionSkip + segmentsPerTurn (~13)
+    // = ~19 at current tuning. Grow well past that so the target segment is
+    // clearly within the checked range. Then move a deep segment onto the
+    // head and confirm the check fires.
+    snake.grow(40);
     for (let i = 0; i < 60; i++) {
       snake.update(1 / 60, 1, 0);
     }
-    const idx = tuning.snake.selfCollisionSkip + 2;
-    // segments is readonly but elements are mutable.
+    const idx = snake.segments.length - 1; // tail, guaranteed past skip
     snake.segments[idx].x = snake.segments[0].x;
     snake.segments[idx].y = snake.segments[0].y;
     expect(snake.checkSelfCollision()).toBe(true);
@@ -100,6 +100,41 @@ describe("Snake", () => {
     snake.update(1 / 60, 1, 0);
     expect(snake.segments[0].x).toBe(beforeX);
     expect(snake.segments[0].y).toBe(beforeY);
+  });
+
+  it("does not self-collide on a realistic 270-degree turn at high body scale", () => {
+    // Regression for #49: at high scale, the head's old hitbox
+    // (head + body radii ~ 48px at scale 3) was larger than the turn-circle
+    // diameter (~33px), so segments on the wraparound of the turning circle
+    // fell inside the head's hitbox on ANY turn past ~180deg.
+    //
+    // Realistic player input: panic 3/4-turn then continue. Sustained spinning
+    // (multiple full rotations) is intentionally NOT tested - that geometry
+    // IS a real self-bite and can't be distinguished from one.
+    const snake = new Snake(2000, 2000);
+    snake.grow(80);
+    for (let i = 0; i < 200; i++) {
+      snake.update(1 / 60, 1, 0);
+    }
+    expect(snake.scale).toBeGreaterThanOrEqual(2);
+
+    let dirX = 1;
+    let dirY = 0;
+    const turnPerFrame = tuning.snake.turnRateRadPerSec / 60;
+    // 270 deg = 3π/2 radians; at turnRate=11 rad/s, this is ~0.43s = 26 frames.
+    const turnFrames = Math.ceil((3 * Math.PI) / 2 / turnPerFrame);
+    for (let i = 0; i < turnFrames; i++) {
+      const a = Math.atan2(dirY, dirX) + turnPerFrame;
+      dirX = Math.cos(a);
+      dirY = Math.sin(a);
+      snake.update(1 / 60, dirX, dirY);
+      expect(snake.checkSelfCollision()).toBe(false);
+    }
+    // Continue straight for 30 frames after the turn completes.
+    for (let i = 0; i < 30; i++) {
+      snake.update(1 / 60, dirX, dirY);
+      expect(snake.checkSelfCollision()).toBe(false);
+    }
   });
 
   it("reset(x,y) brings the snake back to initial length at the given point", () => {
