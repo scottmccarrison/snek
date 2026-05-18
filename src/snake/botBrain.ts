@@ -9,9 +9,29 @@ export class BotBrain {
   private wanderTarget: { x: number; y: number };
   private lastResampleMs = 0;
   private elapsedMs = 0;
+  // Per-bot phase offset so drifting bots don't all sway in sync. Stays
+  // constant for the bot's lifetime.
+  private driftPhase: number;
 
   constructor() {
     this.wanderTarget = this.pickRandomTarget();
+    this.driftPhase = Math.random() * Math.PI * 2;
+  }
+
+  // Smooth sine-based angular perturbation. Applied to seek_food and wander
+  // so bots don't head laser-straight at every pellet. Flee state skips this
+  // (when a larger snake is chasing you, you go in a straight line).
+  private drift(): number {
+    return (
+      Math.sin(this.elapsedMs * tuning.bot.driftFrequency + this.driftPhase) *
+      tuning.bot.driftAngleRad
+    );
+  }
+
+  private applyDrift(dx: number, dy: number): { dirX: number; dirY: number } {
+    const baseAngle = Math.atan2(dy, dx);
+    const a = baseAngle + this.drift();
+    return { dirX: Math.cos(a), dirY: Math.sin(a) };
   }
 
   private pickRandomTarget(): { x: number; y: number } {
@@ -70,10 +90,7 @@ export class BotBrain {
     }
     if (nearestFood) {
       this.state = "seek_food";
-      const dx = nearestFood.x - head.x;
-      const dy = nearestFood.y - head.y;
-      const len = Math.hypot(dx, dy) || 1;
-      return { dirX: dx / len, dirY: dy / len };
+      return this.applyDrift(nearestFood.x - head.x, nearestFood.y - head.y);
     }
 
     // Wander: resample target periodically.
@@ -85,9 +102,6 @@ export class BotBrain {
       this.lastResampleMs = this.elapsedMs;
     }
     this.state = "wander";
-    const dx = this.wanderTarget.x - head.x;
-    const dy = this.wanderTarget.y - head.y;
-    const len = Math.hypot(dx, dy) || 1;
-    return { dirX: dx / len, dirY: dy / len };
+    return this.applyDrift(this.wanderTarget.x - head.x, this.wanderTarget.y - head.y);
   }
 }
