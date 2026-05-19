@@ -58,11 +58,13 @@ export class Snake {
   }
 
   // Visual + collision scale derived from current length. Capped so growth
-  // doesn't run away. At length=initialLength the scale is 1.0; doubling
-  // length adds 0.5 to scale (log2-based), capped at tuning.snake.maxBodyScale.
+  // doesn't run away. At length=initialLength scale is 1.0. Growth uses sqrt
+  // (mass-radius motivated): early gains are visible, late gains taper.
+  // With divisor=300 and cap=5: length 80 -> 1.45, length 320 -> 2.0,
+  // length 1280 -> 3.0, length 5120 -> 5.0 (cap).
   get scale(): number {
-    const ratio = Math.max(1, this.segments.length / tuning.snake.initialLength);
-    return Math.min(tuning.snake.maxBodyScale, 1 + Math.log2(ratio) * 0.5);
+    const excess = Math.max(0, this.segments.length - tuning.snake.initialLength);
+    return Math.min(tuning.snake.maxBodyScale, 1 + Math.sqrt(excess / tuning.snake.scaleDivisor));
   }
 
   get headRadius(): number {

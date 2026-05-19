@@ -385,4 +385,51 @@ describe("BotBrain", () => {
     // Curl fires: direction has a perpendicular (Y) component.
     expect(Math.abs(dirAfterSecond?.dirY ?? 0)).toBeGreaterThan(0.1);
   });
+
+  it("treats own body as a threat when forward-hemisphere segments are in flee range", () => {
+    // Construct a long snake with an established rightward heading, then
+    // manually move a deep body segment into the forward hemisphere within
+    // fleeRadius. The bot should flee (state=flee), not seek/wander.
+    const brain = new BotBrain({
+      aggression: 0.5,
+      caution: 0.5,
+      greed: 0.5,
+      attention: 1.0,
+    });
+    const bot = new Snake(2000, 2000, { id: "self", ownerType: "bot", initialLength: 80 });
+    const world = makeWorld();
+    world.addSnake(bot);
+
+    // First update establishes the bot's heading. With no input the snake
+    // moves in the heading derived from head -> seg[1], which after init is +X.
+    brain.update(bot, world, [], 1 / 60);
+
+    // Manually place a deep segment 100px directly ahead of the head.
+    // selfSkip = 6 + segmentsPerTurn (~13) = ~19. Use idx well past that.
+    const idx = 40;
+    bot.segments[idx].x = bot.segments[0].x + 100;
+    bot.segments[idx].y = bot.segments[0].y;
+
+    brain.update(bot, world, [], 1 / 60);
+    expect(brain.debugCachedState).toBe("flee");
+  });
+
+  it("first-frame self-scan does not flee from the body that's just behind the head", () => {
+    // On spawn there is no heading yet, so the hemisphere filter is bypassed
+    // for the other-snakes pass. If the self-scan also ran here it would see
+    // its own tail and flee. Test that self-scan is gated on hasHeading.
+    const brain = new BotBrain({
+      aggression: 0.5,
+      caution: 0.5,
+      greed: 0.5,
+      attention: 1.0,
+    });
+    const bot = new Snake(2000, 2000, { id: "self", ownerType: "bot", initialLength: 80 });
+    const world = makeWorld();
+    world.addSnake(bot);
+
+    brain.update(bot, world, [], 1 / 60);
+    // No external threats, no food -> should be wander (NOT flee from own body).
+    expect(brain.debugCachedState).not.toBe("flee");
+  });
 });

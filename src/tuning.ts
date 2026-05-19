@@ -11,6 +11,7 @@ export interface Tuning {
     headRadiusPx: number;
     bodyRadiusPx: number;
     maxBodyScale: number;
+    scaleDivisor: number;
   };
   food: {
     targetCount: number;
@@ -108,10 +109,13 @@ export const tuning: Tuning = {
     deadColor: 0xc62828,
     headRadiusPx: 9,
     bodyRadiusPx: 7,
-    // Cap on length-driven body scaling. Scale formula:
-    //   scale = min(maxBodyScale, 1 + log2(length/initialLength) * 0.5)
-    // At initialLength scale=1.0; doubling length adds 0.5; capped here.
-    maxBodyScale: 3,
+    // Body scaling. Formula:
+    //   scale = min(maxBodyScale, 1 + sqrt(max(0, length - initialLength) / scaleDivisor))
+    // At initialLength scale=1.0. sqrt gives gradual growth (mass-radius
+    // motivated): scale rises quickly at first then tapers. At divisor=300:
+    // length 80 -> 1.45, length 320 -> 2.0, length 1280 -> 3.0, length 5120 -> 5.0.
+    maxBodyScale: 5,
+    scaleDivisor: 300,
   },
   food: {
     targetCount: 2000,
