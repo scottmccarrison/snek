@@ -83,4 +83,36 @@ describe("DeathScreen", () => {
 
     ds2.destroy();
   });
+
+  it("constructor cleans up a leaked overlay from a prior instance", () => {
+    // Simulate the case where someone called hide() but not destroy() and
+    // then constructed a new DeathScreen (the restart leak scenario).
+    const cb = vi.fn();
+    const ds = new DeathScreen(cb);
+    ds.show(makeStats());
+    ds.hide(); // does NOT remove the DOM
+    expect(document.querySelectorAll(".snek-death-screen")).toHaveLength(1);
+
+    // Constructing a new instance should leave exactly one overlay,
+    // not stack them.
+    const ds2 = new DeathScreen(cb);
+    expect(document.querySelectorAll(".snek-death-screen")).toHaveLength(1);
+
+    ds2.destroy();
+  });
+
+  it("respawn is guarded against double-tap", () => {
+    const cb = vi.fn();
+    const ds = new DeathScreen(cb);
+    ds.show(makeStats());
+
+    const btn = document.querySelector<HTMLButtonElement>(".snek-death-respawn");
+    btn?.click();
+    btn?.click();
+    btn?.click();
+
+    expect(cb).toHaveBeenCalledOnce();
+
+    ds.destroy();
+  });
 });

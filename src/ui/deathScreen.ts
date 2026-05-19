@@ -21,9 +21,15 @@ export class DeathScreen {
   private el: HTMLDivElement;
   private autoRespawnTimer: ReturnType<typeof setInterval> | null = null;
   private onRespawn: () => void;
+  private respawning = false;
 
   constructor(onRespawn: () => void) {
     this.onRespawn = onRespawn;
+    // Defend against double-construction (restart leak): remove any stale
+    // overlay from a prior DeathScreen instance that wasn't destroyed.
+    for (const stale of document.querySelectorAll(".snek-death-screen")) {
+      stale.remove();
+    }
     this.el = document.createElement("div");
     this.el.className = "snek-death-screen";
     this.el.style.display = "none";
@@ -43,6 +49,7 @@ export class DeathScreen {
   }
 
   show(stats: DeathStats): void {
+    this.respawning = false;
     (this.el.querySelector(".snek-death-length") as HTMLSpanElement).textContent = String(
       stats.length,
     );
@@ -75,6 +82,8 @@ export class DeathScreen {
   }
 
   private respawn(): void {
+    if (this.respawning) return;
+    this.respawning = true;
     this.hide();
     this.onRespawn();
   }
