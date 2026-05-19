@@ -18,6 +18,16 @@ export interface FoodRenderState {
   isPellet: boolean;
 }
 
+// Minimap-friendly view of every snake regardless of viewport cull. Heads
+// only - no segments. Sent every tick so the minimap shows the whole world.
+export interface MinimapHead {
+  id: string;
+  color: number;
+  x: number;
+  y: number;
+  dead: boolean;
+}
+
 export type ClientMsg =
   | { type: "set_nickname"; nickname: string }
   | { type: "set_color"; colorIdx: number }
@@ -53,6 +63,7 @@ export type ServerMsg =
       players: PlayerRosterEntry[];
       snakes: SnakeRenderState[];
       foods: FoodRenderState[];
+      minimapHeads: MinimapHead[];
     }
   | { type: "snake_died"; snakeId: string; killedBy: string | null }
   | { type: "snake_respawned"; snakeId: string }

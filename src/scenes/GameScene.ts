@@ -1,5 +1,5 @@
 import * as Phaser from "phaser";
-import type { FoodRenderState, SnakeRenderState } from "../../shared/protocol";
+import type { FoodRenderState, MinimapHead, SnakeRenderState } from "../../shared/protocol";
 import { SoundManager } from "../audio/sound";
 import { FoodSpawner } from "../food/foodSpawner";
 import { PointerSteering } from "../input/pointer";
@@ -34,7 +34,11 @@ export class GameScene extends Phaser.Scene {
   private mode: "solo" | "mp" = "solo";
   private room: RoomHandle | null = null;
   private mpSnakeStates = new Map<string, SnakeRenderState>();
-  private lastSnapshot: { snakes: SnakeRenderState[]; foods: FoodRenderState[] } | null = null;
+  private lastSnapshot: {
+    snakes: SnakeRenderState[];
+    foods: FoodRenderState[];
+    minimapHeads: MinimapHead[];
+  } | null = null;
   private mpFoodGraphics: Phaser.GameObjects.Graphics | null = null;
   private lastSentAngle: number | null = null;
   private lastSentBoost: boolean | null = null;
@@ -255,7 +259,11 @@ export class GameScene extends Phaser.Scene {
     // to the local player's stored name).
     this.mpUnsubs.push(
       this.room.onMessage("state", (msg) => {
-        this.lastSnapshot = { snakes: msg.snakes, foods: msg.foods };
+        this.lastSnapshot = {
+          snakes: msg.snakes,
+          foods: msg.foods,
+          minimapHeads: msg.minimapHeads,
+        };
         for (const s of msg.snakes) {
           if (s.id === snakeId) {
             this.lastPlayerSegmentCount = s.segments.length;
@@ -463,7 +471,25 @@ export class GameScene extends Phaser.Scene {
         return this.mpNicknames.get(id) ?? snapNicks.get(id);
       };
       this.hud.render({ segments: { length: playerState.segments.length } }, viewWorld, lookup);
-      this.minimap.render(head.x, head.y, viewWorld);
+      // Minimap uses minimapHeads (whole world, not viewport-culled) so
+      // distant bots still appear as dots. Build a thin MinimapWorld
+      // adapter that wraps each head into a single-segment snake.
+      const heads = this.lastSnapshot.minimapHeads;
+      const minimapWorld = {
+        snakes: {
+          *values() {
+            for (const h of heads) {
+              yield {
+                id: h.id,
+                color: h.color,
+                segments: [{ x: h.x, y: h.y }],
+                dead: h.dead,
+              };
+            }
+          },
+        },
+      };
+      this.minimap.render(head.x, head.y, minimapWorld);
     }
   }
 
