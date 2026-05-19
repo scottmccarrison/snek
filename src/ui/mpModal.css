@@ -7,19 +7,21 @@
   color: #fff;
   border: 2px solid #4caf50;
   border-radius: 12px;
-  padding: 24px 28px;
+  padding: 14px 20px;
   font-family: system-ui, sans-serif;
   text-align: center;
   z-index: 110;
-  width: min(90vw, 320px);
+  width: min(92vw, 360px);
+  max-height: 92vh;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 12px;
+  gap: 8px;
   box-sizing: border-box;
 }
 .snek-mp-title {
-  font-size: 24px;
+  font-size: 20px;
   margin: 0;
   letter-spacing: 2px;
   color: #4caf50;
@@ -28,8 +30,8 @@
 .snek-mp-join,
 .snek-mp-cancel {
   border-radius: 6px;
-  padding: 14px 24px;
-  font-size: 16px;
+  padding: 10px 20px;
+  font-size: 15px;
   letter-spacing: 1px;
   cursor: pointer;
   border: 0;
@@ -53,7 +55,7 @@
 }
 .snek-mp-or {
   color: #888;
-  font-size: 12px;
+  font-size: 11px;
   letter-spacing: 2px;
 }
 .snek-mp-join-row {
@@ -61,17 +63,19 @@
   gap: 8px;
 }
 .snek-mp-code {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
   background: #1a1a1a;
   border: 1px solid #444;
   border-radius: 4px;
-  padding: 12px 10px;
+  padding: 9px 8px;
   color: #fff;
-  font-size: 18px;
+  font-size: 16px;
   font-family: inherit;
   text-align: center;
-  letter-spacing: 6px;
+  letter-spacing: 5px;
   text-transform: uppercase;
+  box-sizing: border-box;
 }
 .snek-mp-code:focus {
   outline: none;
@@ -87,7 +91,7 @@
   background: #1976d2;
 }
 .snek-mp-status {
-  font-size: 12px;
+  font-size: 11px;
   color: #ffb347;
-  min-height: 16px;
+  min-height: 14px;
 }
