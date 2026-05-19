@@ -142,7 +142,10 @@ export class Room {
     attachment.welcomeSent = true;
     server.serializeAttachment(attachment);
 
-    await this.ensureTickScheduled();
+    // Always force-schedule the next tick on join, even if a grace-window
+    // GC alarm was already pending. Otherwise reconnects during the grace
+    // window would have to wait until token expiry for the first tick.
+    await this.scheduleNextTick();
 
     return new Response(null, { status: 101, webSocket: pair[0] });
   }
@@ -325,18 +328,22 @@ export class Room {
     }
   }
 
+  // Returns a token entry only if it's not expired. Expired entries are
+  // skipped (and will be GC'd on the next alarm). Hardens against a stale
+  // token being used in the gap between expiry and GC.
   private findResumeToken(token: string): PersistedResumeToken | null {
+    const now = Date.now();
     for (const v of this.resumeTokens.values()) {
-      if (v.token === token) return v;
+      if (v.token === token && v.expiresAt > now) return v;
     }
     return null;
   }
 
-  private async ensureTickScheduled(): Promise<void> {
-    const existing = await this.state.storage.getAlarm();
-    if (existing === null) {
-      await this.state.storage.setAlarm(Date.now() + Math.floor(1000 / tuning.net.serverTickHz));
-    }
+  // Always reschedule the alarm to the next tick. Called on every fresh
+  // socket join. Without this, a room in grace-window mode (alarm set far
+  // out for token GC) would miss its 50ms tick cadence after a reconnect.
+  private async scheduleNextTick(): Promise<void> {
+    await this.state.storage.setAlarm(Date.now() + Math.floor(1000 / tuning.net.serverTickHz));
   }
 
   private async broadcastState(): Promise<void> {

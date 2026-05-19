@@ -42,6 +42,13 @@ export class GameScene extends Phaser.Scene {
   private lastSentAngle: number | null = null;
   private lastSentBoost: boolean | null = null;
   private mpDeathShown = false;
+  // Track player's last-seen segment count from server snapshots so we can
+  // show meaningful stats on the death screen (player Snake instance does
+  // not exist in MP - snapshots are the only source of truth).
+  private lastPlayerSegmentCount = 0;
+  // Unsub functions returned by room.onMessage. Called on scene shutdown to
+  // prevent stale subscribers from firing after a scene restart.
+  private mpUnsubs: Array<() => void> = [];
 
   constructor() {
     super({ key: "GameScene" });
@@ -56,6 +63,18 @@ export class GameScene extends Phaser.Scene {
     this.lastSentAngle = null;
     this.lastSentBoost = null;
     this.mpDeathShown = false;
+    this.lastPlayerSegmentCount = 0;
+    // Cancel any leftover room.onMessage subscriptions from a prior session.
+    // Without this, a re-entry into MP mode would have stale subscribers
+    // firing alongside fresh ones, doubling state handling.
+    for (const unsub of this.mpUnsubs) {
+      try {
+        unsub();
+      } catch {
+        // ignore
+      }
+    }
+    this.mpUnsubs = [];
     // Destroy leftover MP food graphics from a prior session.
     if (this.mpFoodGraphics) {
       this.mpFoodGraphics.destroy();
@@ -236,32 +255,47 @@ export class GameScene extends Phaser.Scene {
 
     const snakeId = this.room.snakeId;
 
-    // Subscribe to server state snapshots.
-    this.room.onMessage("state", (msg) => {
-      this.lastSnapshot = { snakes: msg.snakes, foods: msg.foods };
-    });
+    // Subscribe to server state snapshots. Cache the player's last-seen
+    // length so the death screen has stats to show.
+    this.mpUnsubs.push(
+      this.room.onMessage("state", (msg) => {
+        this.lastSnapshot = { snakes: msg.snakes, foods: msg.foods };
+        for (const s of msg.snakes) {
+          if (s.id === snakeId) {
+            this.lastPlayerSegmentCount = s.segments.length;
+            break;
+          }
+        }
+      }),
+    );
 
     // Subscribe to death events - show death screen for the player's snake.
-    this.room.onMessage("snake_died", (msg) => {
-      if (msg.snakeId === snakeId && !this.mpDeathShown) {
-        this.mpDeathShown = true;
-        void this.handleMpDeath(msg.snakeId);
-      }
-    });
+    this.mpUnsubs.push(
+      this.room.onMessage("snake_died", (msg) => {
+        if (msg.snakeId === snakeId && !this.mpDeathShown) {
+          this.mpDeathShown = true;
+          void this.handleMpDeath(msg.snakeId, msg.killedBy);
+        }
+      }),
+    );
 
     // Subscribe to respawn events - hide death screen when player respawns.
-    this.room.onMessage("snake_respawned", (msg) => {
-      if (msg.snakeId === snakeId && this.mpDeathShown) {
-        this.mpDeathShown = false;
-        this.deathScreen.hide();
-      }
-    });
+    this.mpUnsubs.push(
+      this.room.onMessage("snake_respawned", (msg) => {
+        if (msg.snakeId === snakeId && this.mpDeathShown) {
+          this.mpDeathShown = false;
+          this.deathScreen.hide();
+        }
+      }),
+    );
 
     // Handle disconnect - log it and show a status overlay for Phase 5.
     // Full reconnect is Phase 6 polish.
-    this.room.onClose(() => {
-      console.warn("[snek] WebSocket closed in MP mode");
-    });
+    this.mpUnsubs.push(
+      this.room.onClose(() => {
+        console.warn("[snek] WebSocket closed in MP mode");
+      }),
+    );
 
     // Set up camera at world center initially; will follow player head once
     // we receive the first snapshot with the player snake.
@@ -350,11 +384,20 @@ export class GameScene extends Phaser.Scene {
       const head = playerState.segments[0];
       const { dirX, dirY } = this.steering.update(dt, head.x, head.y);
 
-      // Send input_dir on change (deadband: 0.01 rad).
+      // Send input_dir on change (deadband: 0.01 rad). Use shortest-arc
+      // difference so a turn across the +pi/-pi seam doesn't trigger a
+      // spurious "huge change" send.
       const angle = Math.atan2(dirY, dirX);
-      if (this.lastSentAngle === null || Math.abs(angle - this.lastSentAngle) > 0.01) {
+      if (this.lastSentAngle === null) {
         this.room.send({ type: "input_dir", angle });
         this.lastSentAngle = angle;
+      } else {
+        const rawDelta = Math.abs(angle - this.lastSentAngle);
+        const shortest = Math.min(rawDelta, 2 * Math.PI - rawDelta);
+        if (shortest > 0.01) {
+          this.room.send({ type: "input_dir", angle });
+          this.lastSentAngle = angle;
+        }
       }
 
       // Send input_boost on change.
@@ -447,7 +490,7 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private async handleMpDeath(snakeId: string): Promise<void> {
+  private async handleMpDeath(snakeId: string, killedBy: string | null): Promise<void> {
     // Play animation if the view still exists.
     const view = this.snakeViews.get(snakeId);
     if (view) await view.playDeathAnimation();
@@ -455,9 +498,11 @@ export class GameScene extends Phaser.Scene {
     this.soundManager.setBoosting(false);
     this.soundManager.playDie();
 
-    const stats = { length: 0, score: 0, killedBy: null };
-    // Show the death screen - onRespawn sends {type:'respawn'} to server.
-    this.deathScreen.show(stats);
+    // Build stats from the last-seen player snapshot (player Snake instance
+    // does not exist in MP - snapshots are the only source of truth).
+    const length = this.lastPlayerSegmentCount;
+    const score = Math.max(0, length - tuning.snake.initialLength);
+    this.deathScreen.show({ length, score, killedBy });
 
     // Space-key respawn handler for keyboard users.
     let consumed = false;
