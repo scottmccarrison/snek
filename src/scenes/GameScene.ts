@@ -46,14 +46,27 @@ export class GameScene extends Phaser.Scene {
   // Unsub functions returned by room.onMessage. Called on scene shutdown to
   // prevent stale subscribers from firing after a scene restart.
   private mpUnsubs: Array<() => void> = [];
+  // Local player's initials (solo mode). Captured from MainMenu's onStart.
+  private soloPlayerNickname = "";
+  // MP snake-id -> nickname map. Rebuilt every state message from the
+  // server's roster so the leaderboard labels stay current as players
+  // join / leave / change names.
+  private mpNicknames = new Map<string, string>();
 
   constructor() {
     super({ key: "GameScene" });
   }
 
-  init(data: { mode?: "solo" | "mp"; room?: RoomHandle; code?: string }): void {
+  init(data: {
+    mode?: "solo" | "mp";
+    room?: RoomHandle;
+    code?: string;
+    nickname?: string;
+  }): void {
     this.mode = data.mode ?? "solo";
     this.room = data.room ?? null;
+    this.soloPlayerNickname = data.nickname ?? "";
+    this.mpNicknames.clear();
     // Reset MP tracking state on each init so a restart is clean.
     this.mpSnakeStates.clear();
     this.lastSnapshot = null;
@@ -236,7 +249,10 @@ export class GameScene extends Phaser.Scene {
     const snakeId = this.room.snakeId;
 
     // Subscribe to server state snapshots. Cache the player's last-seen
-    // length so the death screen has stats to show.
+    // length so the death screen has stats to show. Also rebuild the
+    // snakeId -> nickname map from the server roster so HUD leaderboard
+    // labels show real initials (including other humans + 'YOU' resolves
+    // to the local player's stored name).
     this.mpUnsubs.push(
       this.room.onMessage("state", (msg) => {
         this.lastSnapshot = { snakes: msg.snakes, foods: msg.foods };
@@ -245,6 +261,10 @@ export class GameScene extends Phaser.Scene {
             this.lastPlayerSegmentCount = s.segments.length;
             break;
           }
+        }
+        this.mpNicknames.clear();
+        for (const p of msg.players) {
+          if (p.nickname) this.mpNicknames.set(p.snakeId, p.nickname);
         }
       }),
     );
@@ -357,7 +377,12 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.minimap.render(head.x, head.y, this.world);
-    this.hud.render(player, this.world);
+    // Solo nickname lookup: player row shows stored initials (or 'YOU' if
+    // none set), bots show 'BOT'.
+    this.hud.render(player, this.world, (id) => {
+      if (id === "player") return this.soloPlayerNickname || undefined;
+      return "BOT";
+    });
   }
 
   private updateMp(dt: number): void {
@@ -427,7 +452,16 @@ export class GameScene extends Phaser.Scene {
         dead: !s.alive,
       }));
       const viewWorld = { snakes: { values: () => viewSnakes.values() } };
-      this.hud.render({ segments: { length: playerState.segments.length } }, viewWorld);
+      // MP nickname lookup: read from the roster map built from state
+      // messages. Players show their initials; unknown ids (server-side
+      // bots in Phase 7) fall back to 'BOT'.
+      const lookup = (id: string): string | undefined => {
+        const n = this.mpNicknames.get(id);
+        if (n) return n;
+        if (id.startsWith("bot")) return "BOT";
+        return undefined;
+      };
+      this.hud.render({ segments: { length: playerState.segments.length } }, viewWorld, lookup);
       this.minimap.render(head.x, head.y, viewWorld);
     }
   }
