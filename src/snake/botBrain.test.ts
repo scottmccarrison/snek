@@ -432,4 +432,33 @@ describe("BotBrain", () => {
     // No external threats, no food -> should be wander (NOT flee from own body).
     expect(brain.debugCachedState).not.toBe("flee");
   });
+
+  it("flees from a wall it's heading toward within fleeRadius", () => {
+    // Bot near the left wall, established heading toward the wall (-X).
+    // Should flee away from the wall (+X). Forward-hemisphere filter means
+    // the wall must be IN FRONT of the heading to count.
+    const brain = new BotBrain({
+      aggression: 0.5,
+      caution: 0.5,
+      greed: 0.5,
+      attention: 1.0,
+    });
+    // Place head 150px from the left wall (well inside fleeRadius=250).
+    const bot = new Snake(150, 2000, { id: "wall-bot", ownerType: "bot", initialLength: 8 });
+    const world = makeWorld();
+    world.addSnake(bot);
+
+    // Frame 1: establish heading toward the left wall by giving an explicit
+    // leftward direction.
+    bot.pendingDirX = -1;
+    bot.pendingDirY = 0;
+    bot.update(1 / 60, -1, 0);
+
+    // Frame 2: bot should see the wall and flee.
+    brain.update(bot, world, [], 1 / 60);
+    expect(brain.debugCachedState).toBe("flee");
+    // Flee direction should be away from wall (+X positive).
+    const dir = brain.debugCachedDir;
+    expect(dir?.dirX ?? 0).toBeGreaterThan(0.3);
+  });
 });
