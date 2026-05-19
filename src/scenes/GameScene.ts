@@ -394,8 +394,12 @@ export class GameScene extends Phaser.Scene {
         this.soundManager.setBoosting(boost);
       }
 
-      // Camera follows the player's head position.
-      this.cameras.main.setScroll(head.x - 640, head.y - 360);
+      // Camera follows the player's head. Center using the live camera
+      // dimensions instead of a fixed 1280x720 - Scale.RESIZE means cam.width
+      // and cam.height track the actual viewport, which can be much smaller
+      // on a phone in landscape.
+      const cam = this.cameras.main;
+      cam.setScroll(head.x - cam.width / 2, head.y - cam.height / 2);
     } else {
       // No live player - stop boost sound.
       this.soundManager.setBoosting(false);
@@ -410,7 +414,22 @@ export class GameScene extends Phaser.Scene {
       view.render();
     }
 
-    // HUD rendering in MP mode is deferred to Phase 6 (needs server leaderboard).
+    // Render HUD (score + leaderboard + mute) and Minimap using a thin
+    // ViewWorld adapter built from the latest snapshot. Each frame is cheap
+    // since the snapshot is small (10-14 snakes max) and HUD setText is
+    // cached internally.
+    if (this.lastSnapshot && playerState) {
+      const head = playerState.segments[0];
+      const viewSnakes = this.lastSnapshot.snakes.map((s) => ({
+        id: s.id,
+        color: s.color,
+        segments: s.segments,
+        dead: !s.alive,
+      }));
+      const viewWorld = { snakes: { values: () => viewSnakes.values() } };
+      this.hud.render({ segments: { length: playerState.segments.length } }, viewWorld);
+      this.minimap.render(head.x, head.y, viewWorld);
+    }
   }
 
   /**

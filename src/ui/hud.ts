@@ -8,13 +8,28 @@
  */
 
 import type * as Phaser from "phaser";
-import type { World } from "../sim/world";
-import type { Snake } from "../snake/snake";
 import { tuning } from "../tuning";
 
 export interface MuteController {
   isMuted(): boolean;
   toggleMute(): boolean;
+}
+
+// Minimum shape HUD reads from each snake. Both client-side Snake instances
+// (solo mode) and SnakeRenderState DTOs (MP mode) satisfy this via thin
+// adapters, so HUD doesn't care which mode it's in.
+export interface ViewSnake {
+  id: string;
+  segments: ReadonlyArray<{ x: number; y: number }>;
+  dead: boolean;
+}
+
+export interface ViewWorld {
+  snakes: { values(): IterableIterator<ViewSnake> };
+}
+
+export interface ViewPlayer {
+  segments: { length: number };
 }
 
 export interface LeaderboardRow {
@@ -30,7 +45,7 @@ export interface LeaderboardRow {
  * Exported for unit testing without requiring Phaser.
  */
 export function computeLeaderboard(
-  world: World,
+  world: ViewWorld,
   playerId: string,
   topN: number,
   alwaysShowPlayer: boolean,
@@ -240,7 +255,7 @@ export class HUD {
     }
   }
 
-  render(player: Snake, world: World): void {
+  render(player: ViewPlayer, world: ViewWorld): void {
     const length = player.segments.length;
     const score = Math.max(0, length - tuning.snake.initialLength);
 
