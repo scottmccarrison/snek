@@ -2,10 +2,26 @@
  * SnakeView - renders a Snake's segment chain as overlapping circles via
  * Phaser Graphics. Head draws on top of body. playDeathAnimation tweens
  * the entire chain toward tuning.snake.deadColor over tuning.death.fadeMs.
+ *
+ * Accepts a RenderableSnake interface so both the local Snake class and
+ * MP-mode SnakeRenderState DTOs from the server can be rendered without
+ * duplication. Call applyState() each frame in MP mode to feed the latest
+ * snapshot; in solo mode the Snake instance is the same identity reference
+ * so applyState() is called once at construction.
  */
 
 import { tuning } from "../tuning";
-import type { Snake } from "./snake";
+
+export interface RenderableSnake {
+  id: string;
+  color: number;
+  segments: ReadonlyArray<{ x: number; y: number }>;
+  scale: number;
+  boostActive: boolean;
+  dead: boolean;
+  headRadius: number;
+  bodyRadius: number;
+}
 
 export interface SnakeViewOptions {
   outlineExtraPx?: number;
@@ -15,17 +31,26 @@ export interface SnakeViewOptions {
 
 export class SnakeView {
   private graphics: Phaser.GameObjects.Graphics;
-  private snake: Snake;
+  private snake: RenderableSnake;
   private scene: Phaser.Scene;
   private fadeFraction: number;
   private options: SnakeViewOptions | undefined;
 
-  constructor(scene: Phaser.Scene, snake: Snake, options?: SnakeViewOptions) {
+  constructor(scene: Phaser.Scene, snake: RenderableSnake, options?: SnakeViewOptions) {
     this.scene = scene;
     this.snake = snake;
     this.options = options;
     this.fadeFraction = 0;
     this.graphics = scene.add.graphics();
+  }
+
+  /**
+   * Update the cached RenderableSnake reference. In MP mode the GameScene
+   * reconciler calls this every snapshot. In solo mode the live Snake
+   * instance is already the same reference so this is effectively a no-op.
+   */
+  applyState(s: RenderableSnake): void {
+    this.snake = s;
   }
 
   private darken(color: number, factor: number): number {

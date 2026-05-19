@@ -1,11 +1,13 @@
 import * as Phaser from "phaser";
+import type { FoodRenderState, SnakeRenderState } from "../../shared/protocol";
 import { SoundManager } from "../audio/sound";
 import { FoodSpawner } from "../food/foodSpawner";
 import { PointerSteering } from "../input/pointer";
+import type { RoomHandle } from "../net/wsClient";
 import { BotManager } from "../sim/botManager";
 import { World } from "../sim/world";
 import { Snake } from "../snake/snake";
-import { SnakeView } from "../snake/snakeView";
+import { type RenderableSnake, SnakeView } from "../snake/snakeView";
 import { tuning } from "../tuning";
 import { DeathScreen } from "../ui/deathScreen";
 import { HUD } from "../ui/hud";
@@ -31,20 +33,50 @@ export class GameScene extends Phaser.Scene {
   private waitingForRestart = false;
   private worldChromeCreated = false;
 
+  // MP mode state
+  private mode: "solo" | "mp" = "solo";
+  private room: RoomHandle | null = null;
+  private mpSnakeStates = new Map<string, SnakeRenderState>();
+  private lastSnapshot: { snakes: SnakeRenderState[]; foods: FoodRenderState[] } | null = null;
+  private mpFoodGraphics: Phaser.GameObjects.Graphics | null = null;
+  private lastSentAngle: number | null = null;
+  private lastSentBoost: boolean | null = null;
+  private mpDeathShown = false;
+
   constructor() {
     super({ key: "GameScene" });
   }
 
+  init(data: { mode?: "solo" | "mp"; room?: RoomHandle; code?: string }): void {
+    this.mode = data.mode ?? "solo";
+    this.room = data.room ?? null;
+    // Reset MP tracking state on each init so a restart is clean.
+    this.mpSnakeStates.clear();
+    this.lastSnapshot = null;
+    this.lastSentAngle = null;
+    this.lastSentBoost = null;
+    this.mpDeathShown = false;
+    // Destroy leftover MP food graphics from a prior session.
+    if (this.mpFoodGraphics) {
+      this.mpFoodGraphics.destroy();
+      this.mpFoodGraphics = null;
+    }
+  }
+
   create(): void {
     this.createWorldChrome();
-    this.startGame();
-    // StartMenu is constructed once per scene lifetime and is NOT touched
-    // by restart() - 'tap to play again' on death goes straight into a new
-    // game without re-prompting at the menu.
-    this.startMenu = new StartMenu(() => {
-      this.waitingForStart = false;
-    });
-    this.startMenu.show();
+    if (this.mode === "mp") {
+      this.startMpGame();
+    } else {
+      this.startGame();
+      // StartMenu is constructed once per scene lifetime and is NOT touched
+      // by restart() - 'tap to play again' on death goes straight into a new
+      // game without re-prompting at the menu.
+      this.startMenu = new StartMenu(() => {
+        this.waitingForStart = false;
+      });
+      this.startMenu.show();
+    }
   }
 
   // Static world dressing - background grid, edges, vignette. Created once.
@@ -172,6 +204,75 @@ export class GameScene extends Phaser.Scene {
     this.waitingForRestart = false;
   }
 
+  private startMpGame(): void {
+    if (!this.room) return;
+
+    this.soundManager = new SoundManager();
+    this.audioUnlocked = false;
+
+    this.minimap = new Minimap(this);
+    this.hud = new HUD(this, this.soundManager);
+
+    // MP death screen: tap-to-play-again sends respawn to server instead
+    // of rebuilding the local world.
+    this.deathScreen = new DeathScreen(() => {
+      this.room?.send({ type: "respawn" });
+    });
+
+    this.joystick = new JoystickIndicator(this);
+    this.steering = new PointerSteering(
+      this,
+      (screenX, screenY) =>
+        this.minimap.hitsMinimap(screenX, screenY) || this.hud.hitsMuteButton(screenX, screenY),
+      {
+        onTouchStart: (sx, sy) => this.joystick.show(sx, sy),
+        onTouchMove: (sx, sy) => this.joystick.updateStick(sx, sy),
+        onTouchEnd: () => this.joystick.hide(),
+      },
+    );
+
+    // MP food graphics layer (redrawn each frame from snapshot).
+    this.mpFoodGraphics = this.add.graphics();
+
+    const snakeId = this.room.snakeId;
+
+    // Subscribe to server state snapshots.
+    this.room.onMessage("state", (msg) => {
+      this.lastSnapshot = { snakes: msg.snakes, foods: msg.foods };
+    });
+
+    // Subscribe to death events - show death screen for the player's snake.
+    this.room.onMessage("snake_died", (msg) => {
+      if (msg.snakeId === snakeId && !this.mpDeathShown) {
+        this.mpDeathShown = true;
+        void this.handleMpDeath(msg.snakeId);
+      }
+    });
+
+    // Subscribe to respawn events - hide death screen when player respawns.
+    this.room.onMessage("snake_respawned", (msg) => {
+      if (msg.snakeId === snakeId && this.mpDeathShown) {
+        this.mpDeathShown = false;
+        this.deathScreen.hide();
+      }
+    });
+
+    // Handle disconnect - log it and show a status overlay for Phase 5.
+    // Full reconnect is Phase 6 polish.
+    this.room.onClose(() => {
+      console.warn("[snek] WebSocket closed in MP mode");
+    });
+
+    // Set up camera at world center initially; will follow player head once
+    // we receive the first snapshot with the player snake.
+    const worldDims = this.room.worldDims;
+    this.cameras.main.setBounds(0, 0, worldDims.w, worldDims.h);
+    this.cameras.main.setScroll(worldDims.w / 2 - 640, worldDims.h / 2 - 360);
+
+    this.waitingForStart = false;
+    this.waitingForRestart = false;
+  }
+
   update(_time: number, deltaMs: number): void {
     const dt = Math.min(deltaMs / 1000, 1 / 30);
 
@@ -181,6 +282,12 @@ export class GameScene extends Phaser.Scene {
       this.audioUnlocked = true;
     }
 
+    if (this.mode === "mp") {
+      this.updateMp(dt);
+      return;
+    }
+
+    // Solo mode - unchanged from prior implementation.
     if (this.waitingForStart || this.waitingForRestart) return;
 
     const player = this.world.snakes.get("player");
@@ -231,6 +338,135 @@ export class GameScene extends Phaser.Scene {
 
     this.minimap.render(head.x, head.y, this.world);
     this.hud.render(player, this.world);
+  }
+
+  private updateMp(dt: number): void {
+    if (!this.room) return;
+
+    // Find the player's snake in the latest snapshot for steering + camera.
+    const playerState = this.lastSnapshot?.snakes.find((s) => s.id === this.room?.snakeId);
+
+    if (playerState?.alive) {
+      const head = playerState.segments[0];
+      const { dirX, dirY } = this.steering.update(dt, head.x, head.y);
+
+      // Send input_dir on change (deadband: 0.01 rad).
+      const angle = Math.atan2(dirY, dirX);
+      if (this.lastSentAngle === null || Math.abs(angle - this.lastSentAngle) > 0.01) {
+        this.room.send({ type: "input_dir", angle });
+        this.lastSentAngle = angle;
+      }
+
+      // Send input_boost on change.
+      const boost = this.steering.getBoostHeld();
+      if (boost !== this.lastSentBoost) {
+        this.room.send({ type: "input_boost", active: boost });
+        this.lastSentBoost = boost;
+        this.soundManager.setBoosting(boost);
+      }
+
+      // Camera follows the player's head position.
+      this.cameras.main.setScroll(head.x - 640, head.y - 360);
+    } else {
+      // No live player - stop boost sound.
+      this.soundManager.setBoosting(false);
+    }
+
+    // Render the latest snapshot via the reconciler.
+    if (this.lastSnapshot) {
+      this.syncMpSnakes(this.lastSnapshot.snakes);
+      this.syncMpFoods(this.lastSnapshot.foods);
+    }
+    for (const view of this.snakeViews.values()) {
+      view.render();
+    }
+
+    // HUD rendering in MP mode is deferred to Phase 6 (needs server leaderboard).
+  }
+
+  /**
+   * Reconcile snake views with the latest server snapshot. Creates new
+   * SnakeView instances for newly-appearing snakes and destroys views for
+   * snakes that are no longer in the snapshot.
+   */
+  private syncMpSnakes(snakes: SnakeRenderState[]): void {
+    const seen = new Set<string>();
+    for (const s of snakes) {
+      seen.add(s.id);
+      this.mpSnakeStates.set(s.id, s);
+      const renderable: RenderableSnake = {
+        id: s.id,
+        color: s.color,
+        segments: s.segments,
+        scale: s.scale,
+        boostActive: s.boostActive,
+        dead: !s.alive,
+        headRadius: tuning.snake.headRadiusPx * s.scale,
+        bodyRadius: tuning.snake.bodyRadiusPx * s.scale,
+      };
+      let view = this.snakeViews.get(s.id);
+      if (!view) {
+        const isPlayer = s.id === this.room?.snakeId;
+        view = new SnakeView(
+          this,
+          renderable,
+          isPlayer
+            ? {
+                outlineExtraPx: tuning.bot.playerOutlineExtraPx,
+                outlineColor: tuning.bot.playerOutlineColor,
+                outlineAlpha: tuning.bot.playerOutlineAlpha,
+              }
+            : undefined,
+        );
+        this.snakeViews.set(s.id, view);
+      } else {
+        view.applyState(renderable);
+      }
+    }
+    // Destroy views for snakes no longer in the snapshot.
+    for (const [id, view] of this.snakeViews) {
+      if (!seen.has(id)) {
+        view.destroy();
+        this.snakeViews.delete(id);
+      }
+    }
+  }
+
+  /**
+   * Redraw all visible food pellets from the server snapshot.
+   * Simple full-redraw each frame (no per-food sprites - too many objects).
+   * Phase 6 can add spawn animations.
+   */
+  private syncMpFoods(foods: FoodRenderState[]): void {
+    if (!this.mpFoodGraphics) return;
+    this.mpFoodGraphics.clear();
+    this.mpFoodGraphics.fillStyle(tuning.food.color, 1);
+    for (const f of foods) {
+      const r = f.isPellet ? tuning.death.pelletRadiusPx : tuning.food.radiusPx;
+      this.mpFoodGraphics.fillCircle(f.x, f.y, r);
+    }
+  }
+
+  private async handleMpDeath(snakeId: string): Promise<void> {
+    // Play animation if the view still exists.
+    const view = this.snakeViews.get(snakeId);
+    if (view) await view.playDeathAnimation();
+
+    this.soundManager.setBoosting(false);
+    this.soundManager.playDie();
+
+    const stats = { length: 0, score: 0, killedBy: null };
+    // Show the death screen - onRespawn sends {type:'respawn'} to server.
+    this.deathScreen.show(stats);
+
+    // Space-key respawn handler for keyboard users.
+    let consumed = false;
+    const doRespawn = () => {
+      if (consumed) return;
+      consumed = true;
+      this.room?.send({ type: "respawn" });
+    };
+    this.input.keyboard?.once("keydown-SPACE", doRespawn);
   }
 
   private onSnakeDiedHandler(snakeId: string, _killedBy: string | null): void {
