@@ -400,15 +400,20 @@ describe("BotBrain", () => {
     const world = makeWorld();
     world.addSnake(bot);
 
-    // First update establishes the bot's heading. With no input the snake
-    // moves in the heading derived from head -> seg[1], which after init is +X.
+    // First update establishes the bot's heading via wander (random target).
+    // We need a deterministic placement, so read the chosen direction back
+    // and project the threat segment along it.
     brain.update(bot, world, [], 1 / 60);
+    const dir = brain.debugCachedDir;
+    if (!dir) throw new Error("expected a cached decision direction after first update");
 
-    // Manually place a deep segment 100px directly ahead of the head.
-    // selfSkip = 6 + segmentsPerTurn (~13) = ~19. Use idx well past that.
-    const idx = 40;
-    bot.segments[idx].x = bot.segments[0].x + 100;
-    bot.segments[idx].y = bot.segments[0].y;
+    // Manually place a deep segment 100px in the bot's current heading
+    // direction (clearly in the forward hemisphere). selfSkip = 6 +
+    // segmentsPerTurn (~11 at turnRate=14) = ~17. Scan cap is selfSkip +
+    // segmentsPerTurn*2 = ~39. Use an idx clearly inside both.
+    const idx = 25;
+    bot.segments[idx].x = bot.segments[0].x + dir.dirX * 100;
+    bot.segments[idx].y = bot.segments[0].y + dir.dirY * 100;
 
     brain.update(bot, world, [], 1 / 60);
     expect(brain.debugCachedState).toBe("flee");

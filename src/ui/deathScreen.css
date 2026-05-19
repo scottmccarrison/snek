@@ -52,3 +52,49 @@
   color: #aaa;
   margin: 12px 0 0;
 }
+
+.snek-death-new-best {
+  display: none;
+  background: #ffeb3b;
+  color: #222;
+  font-weight: bold;
+  font-size: 18px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin: -8px 0 12px;
+  letter-spacing: 1px;
+}
+
+.snek-death-bests {
+  margin: 0 0 12px;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  padding: 10px 14px 6px;
+}
+
+.snek-death-bests-title {
+  font-size: 13px;
+  color: #aaa;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 6px;
+}
+
+.snek-death-bests-list {
+  list-style: decimal inside;
+  padding: 0;
+  margin: 0;
+  font-size: 16px;
+  color: #fff;
+  line-height: 1.5;
+}
+
+.snek-death-bests-list li {
+  padding: 1px 0;
+}
+
+.snek-death-bests-current {
+  color: #ffeb3b;
+  font-weight: bold;
+}

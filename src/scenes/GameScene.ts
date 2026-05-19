@@ -12,6 +12,7 @@ import { DeathScreen } from "../ui/deathScreen";
 import { HUD } from "../ui/hud";
 import { JoystickIndicator } from "../ui/joystickIndicator";
 import { Minimap } from "../ui/minimap";
+import { StartMenu } from "../ui/startMenu";
 
 export class GameScene extends Phaser.Scene {
   private world!: World;
@@ -27,6 +28,8 @@ export class GameScene extends Phaser.Scene {
   private audioUnlocked = false;
   private hud!: HUD;
   private deathScreen!: DeathScreen;
+  private startMenu!: StartMenu;
+  private waitingForStart = true;
   private waitingForRestart = false;
   private worldChromeCreated = false;
 
@@ -37,6 +40,13 @@ export class GameScene extends Phaser.Scene {
   create(): void {
     this.createWorldChrome();
     this.startGame();
+    // StartMenu is constructed once per scene lifetime and is NOT touched
+    // by restart() - 'tap to play again' on death goes straight into a new
+    // game without re-prompting at the menu.
+    this.startMenu = new StartMenu(() => {
+      this.waitingForStart = false;
+    });
+    this.startMenu.show();
   }
 
   // Static world dressing - background grid, edges, vignette. Created once.
@@ -174,7 +184,7 @@ export class GameScene extends Phaser.Scene {
       this.audioUnlocked = true;
     }
 
-    if (this.waitingForRestart) return;
+    if (this.waitingForStart || this.waitingForRestart) return;
 
     const player = this.world.snakes.get("player");
     if (!player || player.dead) return;
