@@ -255,7 +255,18 @@ export class HUD {
     }
   }
 
-  render(player: ViewPlayer, world: ViewWorld): void {
+  /**
+   * Render with an optional `nicknameLookup` that maps snake id -> display
+   * name. Solo callers pass a function that returns the local player's
+   * stored initials for the player snake and 'BOT' for the rest. MP callers
+   * pass a lookup built from the latest `state.players[]` roster so other
+   * humans appear by their initials.
+   */
+  render(
+    player: ViewPlayer,
+    world: ViewWorld,
+    nicknameLookup?: (snakeId: string) => string | undefined,
+  ): void {
     const length = player.segments.length;
     const score = Math.max(0, length - tuning.snake.initialLength);
 
@@ -288,9 +299,12 @@ export class HUD {
       if (!t.visible) t.setVisible(true);
       t.setPosition(leaderX, inset + i * rowH);
 
-      const text = row.isPlaceholder
-        ? "..."
-        : `#${row.rank} ${row.isPlayer ? "YOU" : row.id.slice(0, 8)} ${row.length}`;
+      // Build display label. Player row shows their initials (lookup may
+      // return the stored name). Other rows show the lookup result, else
+      // a snake-id prefix as fallback.
+      const looked = nicknameLookup?.(row.id);
+      const label = row.isPlayer ? (looked ?? "YOU") : (looked ?? row.id.slice(0, 8));
+      const text = row.isPlaceholder ? "..." : `#${row.rank} ${label} ${row.length}`;
       const color = row.isPlaceholder ? "#aaaaaa" : row.isPlayer ? highlightHex : normalHex;
 
       if (this.lastRowTexts[i] !== text) {
