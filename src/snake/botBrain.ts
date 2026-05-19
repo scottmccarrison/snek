@@ -1,3 +1,4 @@
+import type { SeededRng } from "../../shared/seededRng";
 import type { World } from "../sim/world";
 import { tuning } from "../tuning";
 import type { Snake } from "./snake";
@@ -11,8 +12,9 @@ export interface BotPersonality {
   attention: number;
 }
 
-function randInRange(range: { min: number; max: number }): number {
-  return range.min + Math.random() * (range.max - range.min);
+function randInRange(range: { min: number; max: number }, rng?: SeededRng): number {
+  const r = rng ? rng.random() : Math.random();
+  return range.min + r * (range.max - range.min);
 }
 
 export class BotBrain {
@@ -22,6 +24,7 @@ export class BotBrain {
   private wanderTarget: { x: number; y: number };
   private lastResampleMs = 0;
   private elapsedMs = 0;
+  private rng: SeededRng | undefined;
   // Per-bot phase offset so drifting bots don't all sway in sync. Stays
   // constant for the bot's lifetime.
   private driftPhase: number;
@@ -40,18 +43,19 @@ export class BotBrain {
   private lastTargetMs = 0;
   private lastThreatDist: number | null = null;
 
-  constructor(personality?: BotPersonality) {
-    this.personality = personality ?? BotBrain.randomPersonality();
-    this.wanderTarget = this.pickRandomTarget();
-    this.driftPhase = Math.random() * Math.PI * 2;
+  constructor(personality?: BotPersonality, rng?: SeededRng) {
+    this.rng = rng;
+    this.personality = personality ?? BotBrain.randomPersonality(rng);
+    this.wanderTarget = this.pickRandomTarget(rng);
+    this.driftPhase = rng ? rng.random() * Math.PI * 2 : Math.random() * Math.PI * 2;
   }
 
-  static randomPersonality(): BotPersonality {
+  static randomPersonality(rng?: SeededRng): BotPersonality {
     return {
-      aggression: randInRange(tuning.bot.personalityRange.aggression),
-      caution: randInRange(tuning.bot.personalityRange.caution),
-      greed: randInRange(tuning.bot.personalityRange.greed),
-      attention: randInRange(tuning.bot.personalityRange.attention),
+      aggression: randInRange(tuning.bot.personalityRange.aggression, rng),
+      caution: randInRange(tuning.bot.personalityRange.caution, rng),
+      greed: randInRange(tuning.bot.personalityRange.greed, rng),
+      attention: randInRange(tuning.bot.personalityRange.attention, rng),
     };
   }
 
@@ -92,15 +96,15 @@ export class BotBrain {
     return { dirX: this.currentDirX, dirY: this.currentDirY };
   }
 
-  private pickRandomTarget(): { x: number; y: number } {
+  private pickRandomTarget(rng?: SeededRng): { x: number; y: number } {
     const cx = tuning.world.widthPx / 2;
     const cy = tuning.world.heightPx / 2;
     const halfDiag = Math.hypot(cx, cy);
     let best = { x: 0, y: 0 };
     let bestScore = Number.NEGATIVE_INFINITY;
     for (let i = 0; i < tuning.bot.wanderCandidates; i++) {
-      const x = Math.random() * tuning.world.widthPx;
-      const y = Math.random() * tuning.world.heightPx;
+      const x = (rng ? rng.random() : Math.random()) * tuning.world.widthPx;
+      const y = (rng ? rng.random() : Math.random()) * tuning.world.heightPx;
       const dist = Math.hypot(x - cx, y - cy);
       const score = 1 - dist / halfDiag;
       if (score > bestScore) {
@@ -368,7 +372,7 @@ export class BotBrain {
       this.state !== "wander" ||
       this.elapsedMs - this.lastResampleMs > tuning.bot.wanderResampleMs
     ) {
-      this.wanderTarget = this.pickRandomTarget();
+      this.wanderTarget = this.pickRandomTarget(this.rng);
       this.lastResampleMs = this.elapsedMs;
     }
     this.state = "wander";

@@ -1,4 +1,14 @@
 export interface Tuning {
+  net: {
+    serverTickHz: number;
+    viewRadiusPx: number;
+    maxHumansPerRoom: number;
+    minSnakesPerRoom: number;
+    resumeTokenTtlSec: number;
+    maxInputsPerSecPerClient: number;
+    maxClientLogPerSecPerSocket: number;
+    nicknameMaxLen: number;
+  };
   snake: {
     speedPxPerSec: number;
     spacingPx: number;
@@ -110,6 +120,16 @@ export interface Tuning {
 }
 
 export const tuning: Tuning = {
+  net: {
+    serverTickHz: 20,
+    viewRadiusPx: 800,
+    maxHumansPerRoom: 8,
+    minSnakesPerRoom: 6,
+    resumeTokenTtlSec: 60,
+    maxInputsPerSecPerClient: 60,
+    maxClientLogPerSecPerSocket: 30,
+    nicknameMaxLen: 16,
+  },
   snake: {
     speedPxPerSec: 180,
     spacingPx: 8,

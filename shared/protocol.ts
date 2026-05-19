@@ -1,0 +1,54 @@
+// Discriminated unions for ClientMsg / ServerMsg. JSON wire format.
+
+export interface SnakeRenderState {
+  id: string;
+  ownerType: "player" | "bot";
+  color: number;
+  alive: boolean;
+  segments: Array<{ x: number; y: number }>;
+  boostActive: boolean;
+  scale: number; // pre-computed so client doesn't redo log/sqrt math
+}
+
+export interface FoodRenderState {
+  id: string;
+  x: number;
+  y: number;
+  isPellet: boolean;
+}
+
+export type ClientMsg =
+  | { type: "set_nickname"; nickname: string }
+  | { type: "set_color"; colorIdx: number }
+  | { type: "input_dir"; angle: number }
+  | { type: "input_boost"; active: boolean }
+  | { type: "respawn" }
+  | { type: "leave" }
+  | { type: "client_log"; level: "info" | "warn" | "error"; msg: string };
+
+export type ServerMsg =
+  | {
+      type: "welcome";
+      sessionId: string;
+      resumeToken: string;
+      snakeId: string;
+      worldDims: { w: number; h: number };
+      tickHz: number;
+    }
+  | {
+      type: "state";
+      serverTime: number;
+      snakes: SnakeRenderState[];
+      foods: FoodRenderState[];
+    }
+  | { type: "snake_died"; snakeId: string; killedBy: string | null }
+  | { type: "snake_respawned"; snakeId: string }
+  | { type: "food_eaten"; ids: string[] }
+  | { type: "error"; code: string; message: string };
+
+// Type guard for runtime dispatch
+export function isClientMsg(msg: unknown): msg is ClientMsg {
+  if (typeof msg !== "object" || msg === null) return false;
+  const m = msg as { type?: unknown };
+  return typeof m.type === "string";
+}
