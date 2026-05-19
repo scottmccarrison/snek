@@ -498,6 +498,7 @@ export class Room {
         players,
         snakes: snap.snakes,
         foods: snap.foods,
+        minimapHeads: snap.minimapHeads,
       };
       try {
         ws.send(JSON.stringify(stateMsg));
@@ -551,13 +552,16 @@ export class Room {
 
   private async maybeStartGame(): Promise<void> {
     if (this.phase === "playing") return;
-    // Need at least 1 player AND all connected (live socket) players ready.
+    // Need at least 2 live players AND all of them ready. A lone host can
+    // ready up but the phase won't flip until someone else joins -
+    // otherwise the moment a second person joins, the game would start
+    // before they had a chance to ready up.
     const liveSessionIds = new Set<string>();
     for (const ws of this.state.getWebSockets()) {
       const att = ws.deserializeAttachment() as SocketAttachment | null;
       if (att) liveSessionIds.add(att.sessionId);
     }
-    if (liveSessionIds.size === 0) return;
+    if (liveSessionIds.size < 2) return;
     for (const sid of liveSessionIds) {
       if (!this.readyStates.get(sid)) return;
     }

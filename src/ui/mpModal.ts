@@ -141,6 +141,29 @@ export class MpModal {
       li.innerHTML = `${hostTag}<span class="snek-mp-roster-name">${p.nickname || "ANO"}</span> ${readyBadge}`;
       ol.appendChild(li);
     }
+    // Gate the READY button: needs at least 2 players. Avoids the case where
+    // a lone host readies up and the game starts the moment a second player
+    // joins (before they had a chance to ready themselves).
+    const readyBtn = this.el.querySelector<HTMLButtonElement>(".snek-mp-ready");
+    if (readyBtn) {
+      const enoughPlayers = players.length >= 2;
+      readyBtn.disabled = !enoughPlayers;
+      readyBtn.classList.toggle("ready-disabled", !enoughPlayers);
+      if (!enoughPlayers) {
+        readyBtn.textContent = "Waiting for another player...";
+        if (this.myReady) {
+          // If our local ready state was true, server now sees only us
+          // ready - it won't flip phase due to the size>=2 guard, but
+          // sync UI state to false so the button stays disabled.
+          this.myReady = false;
+          readyBtn.classList.remove("ready-active");
+        }
+      } else if (!this.myReady) {
+        readyBtn.textContent = "READY";
+      } else {
+        readyBtn.textContent = "READY (waiting)";
+      }
+    }
   }
 
   private tearDownLobbySubs(): void {

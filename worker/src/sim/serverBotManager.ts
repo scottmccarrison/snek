@@ -96,7 +96,13 @@ export class ServerBotManager {
 
   private spawnOneBot(sim: SnakeSim): void {
     const id = `bot${this.nextBotId++}`;
-    const nickname = `BO${this.nextBotId - 1}`;
+    // Random 3-letter initials so the leaderboard reads like a full lobby
+    // rather than 'BO1, BO2, BO3'. Re-roll up to 8 times if the rolled
+    // initials collide with an already-in-use bot nickname (26^3 = 17576
+    // possible combos for 9 bots; collisions are rare).
+    const used = new Set(this.nicknames.values());
+    let nickname = this.randomInitials();
+    for (let i = 0; i < 8 && used.has(nickname); i++) nickname = this.randomInitials();
     const palette = tuning.bot.palette;
     const colorIdx = this.rng.int(palette.length);
     const color = palette[colorIdx];
@@ -106,6 +112,11 @@ export class ServerBotManager {
     sim.addBot(id, color, x, y);
     this.brains.set(id, new BotBrain(undefined, this.rng));
     this.nicknames.set(id, nickname);
+  }
+
+  private randomInitials(): string {
+    const a = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    return a[this.rng.int(26)] + a[this.rng.int(26)] + a[this.rng.int(26)];
   }
 
   private pickSafeSpawnPoint(sim: SnakeSim): { x: number; y: number } {

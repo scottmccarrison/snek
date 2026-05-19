@@ -44,13 +44,18 @@ describe("ServerBotManager", () => {
     expect(bots).toBe(tuning.net.totalSnakesPerRoom - 3);
   });
 
-  it("assigns sequential BO1, BO2, ... nicknames", () => {
+  it("assigns random 3-letter A-Z nicknames, unique per bot", () => {
     const sim = new SnakeSim(1);
     const mgr = new ServerBotManager(2);
     mgr.update(sim, 0, 1 / 20);
-    const names = Array.from(mgr.getNicknames().values()).sort();
-    expect(names[0]).toBe("BO1");
+    const names = Array.from(mgr.getNicknames().values());
     expect(names.length).toBe(tuning.net.totalSnakesPerRoom);
+    for (const n of names) {
+      expect(n.length).toBe(3);
+      expect(/^[A-Z]{3}$/.test(n)).toBe(true);
+    }
+    // Unique (collisions are statistically rare for 10 names from 26^3).
+    expect(new Set(names).size).toBe(names.length);
   });
 
   it("bot AI drives pendingDir each tick", () => {

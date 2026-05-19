@@ -236,9 +236,9 @@ export const tuning: Tuning = {
     vignetteAlpha: 0.18,
   },
   minimap: {
-    sizePx: 160,
+    sizePx: 80,
     insetPx: 16,
-    dotRadiusPx: 4,
+    dotRadiusPx: 3,
     bgColor: 0x0b0b0f,
     bgAlpha: 0.55,
     borderColor: 0x88ddff,

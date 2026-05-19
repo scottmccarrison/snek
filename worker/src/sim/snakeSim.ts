@@ -1,5 +1,5 @@
 import { FoodState } from "../../../shared/foodState";
-import type { FoodRenderState, SnakeRenderState } from "../../../shared/protocol";
+import type { FoodRenderState, MinimapHead, SnakeRenderState } from "../../../shared/protocol";
 import { SeededRng } from "../../../shared/seededRng";
 import { World } from "../../../src/sim/world";
 import { Snake } from "../../../src/snake/snake";
@@ -130,13 +130,28 @@ export class SnakeSim {
     cullCenterX: number,
     cullCenterY: number,
     nicknameLookup?: (id: string) => string | undefined,
-  ): { snakes: SnakeRenderState[]; foods: FoodRenderState[] } {
+  ): {
+    snakes: SnakeRenderState[];
+    foods: FoodRenderState[];
+    minimapHeads: MinimapHead[];
+  } {
     const cullR = tuning.net.viewRadiusPx;
     const cullR2 = cullR * cullR;
     const snakes: SnakeRenderState[] = [];
+    // Minimap heads: every snake's head position regardless of viewport
+    // cull. Cheap (~32 bytes per entry, ~10 entries) so we always send it.
+    // Without this, distant bots wouldn't show on the player's minimap.
+    const minimapHeads: MinimapHead[] = [];
     for (const snake of this.world.snakes.values()) {
-      // Include snake if its HEAD is within cull radius.
       const h = snake.segments[0];
+      minimapHeads.push({
+        id: snake.id,
+        color: snake.color,
+        x: h.x,
+        y: h.y,
+        dead: snake.dead,
+      });
+      // Snake segments only included for nearby snakes (rendering cost).
       const dx = h.x - cullCenterX;
       const dy = h.y - cullCenterY;
       if (dx * dx + dy * dy > cullR2) continue;
@@ -158,7 +173,7 @@ export class SnakeSim {
       y: f.y,
       isPellet: f.isPellet,
     }));
-    return { snakes, foods };
+    return { snakes, foods, minimapHeads };
   }
 
   serialize(): SimSnapshot {

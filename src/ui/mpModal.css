@@ -161,3 +161,11 @@
 .snek-mp-ready.ready-active {
   background: #4caf50;
 }
+.snek-mp-ready.ready-disabled,
+.snek-mp-ready:disabled {
+  background: #444;
+  color: #888;
+  cursor: not-allowed;
+  font-size: 12px;
+  letter-spacing: 1px;
+}
