@@ -35,11 +35,16 @@ export class BootScene extends Phaser.Scene {
       onMultiplayer: () => {
         this.mainMenu?.hide();
         this.mpModal = new MpModal({
-          onJoined: (room, code) => {
+          onGameStart: (room, code) => {
             this.tearDown();
             this.scene.start("GameScene", { mode: "mp", room, code });
           },
           onCancel: () => {
+            this.mpModal?.destroy();
+            this.mpModal = null;
+            this.mainMenu?.show("title");
+          },
+          onGameEnded: () => {
             this.mpModal?.destroy();
             this.mpModal = null;
             this.mainMenu?.show("title");
@@ -61,11 +66,16 @@ export class BootScene extends Phaser.Scene {
     if (presetCode) {
       this.mainMenu.hide();
       this.mpModal = new MpModal({
-        onJoined: (room, code) => {
+        onGameStart: (room, code) => {
           this.tearDown();
           this.scene.start("GameScene", { mode: "mp", room, code });
         },
         onCancel: () => {
+          this.mpModal?.destroy();
+          this.mpModal = null;
+          this.mainMenu?.show("title");
+        },
+        onGameEnded: () => {
           this.mpModal?.destroy();
           this.mpModal = null;
           this.mainMenu?.show("title");

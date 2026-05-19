@@ -1,9 +1,11 @@
+import type { PlayerRosterEntry } from "../../shared/protocol";
 import { type NetClient, makeNetClient } from "../net/client";
 import type { RoomHandle } from "../net/wsClient";
 
 export interface MpModalCallbacks {
-  onJoined: (room: RoomHandle, code: string) => void;
+  onGameStart: (room: RoomHandle, code: string) => void;
   onCancel: () => void;
+  onGameEnded: () => void;
 }
 
 export class MpModal {
@@ -12,6 +14,10 @@ export class MpModal {
   private netClient: NetClient;
   private busy = false;
   private nickname = "ANO";
+  private room: RoomHandle | null = null;
+  private myReady = false;
+  private stateUnsub: (() => void) | null = null;
+  private endedUnsub: (() => void) | null = null;
 
   constructor(cbs: MpModalCallbacks) {
     this.cbs = cbs;
@@ -30,6 +36,11 @@ export class MpModal {
       </div>
       <button class="snek-mp-cancel">Cancel</button>
       <div class="snek-mp-status"></div>
+      <div class="snek-mp-lobby" style="display:none">
+        <div class="snek-mp-lobby-title">Room <span class="snek-mp-lobby-code"></span></div>
+        <ol class="snek-mp-roster"></ol>
+        <button class="snek-mp-ready">READY</button>
+      </div>
     `;
     document.body.appendChild(this.el);
 
@@ -47,14 +58,19 @@ export class MpModal {
     this.el
       .querySelector<HTMLButtonElement>(".snek-mp-join")
       ?.addEventListener("click", () => this.handleJoin());
-    this.el
-      .querySelector<HTMLButtonElement>(".snek-mp-cancel")
-      ?.addEventListener("click", () => this.cbs.onCancel());
+    this.el.querySelector<HTMLButtonElement>(".snek-mp-cancel")?.addEventListener("click", () => {
+      if (this.room) {
+        this.room.leave();
+        this.room = null;
+      }
+      this.cbs.onCancel();
+    });
   }
 
   show(nickname: string): void {
     this.nickname = nickname;
     this.busy = false;
+    this.myReady = false;
     this.setStatus("");
     this.el.style.display = "flex";
   }
@@ -64,8 +80,74 @@ export class MpModal {
   }
 
   destroy(): void {
+    this.tearDownLobbySubs();
     this.hide();
     this.el.remove();
+  }
+
+  switchToLobby(room: RoomHandle, code: string): void {
+    this.room = room;
+    this.myReady = false;
+    // Hide prejoin UI.
+    const hostBtn = this.el.querySelector<HTMLButtonElement>(".snek-mp-host");
+    const joinRow = this.el.querySelector<HTMLDivElement>(".snek-mp-join-row");
+    const orDiv = this.el.querySelector<HTMLDivElement>(".snek-mp-or");
+    if (hostBtn) hostBtn.style.display = "none";
+    if (joinRow) joinRow.style.display = "none";
+    if (orDiv) orDiv.style.display = "none";
+    // Show lobby UI.
+    const lobby = this.el.querySelector<HTMLDivElement>(".snek-mp-lobby");
+    if (lobby) lobby.style.display = "block";
+    const codeSpan = this.el.querySelector<HTMLSpanElement>(".snek-mp-lobby-code");
+    if (codeSpan) codeSpan.textContent = code;
+    // READY toggle.
+    const readyBtn = this.el.querySelector<HTMLButtonElement>(".snek-mp-ready");
+    if (readyBtn) {
+      // Remove any old listeners by cloning.
+      const fresh = readyBtn.cloneNode(true) as HTMLButtonElement;
+      readyBtn.parentNode?.replaceChild(fresh, readyBtn);
+      fresh.addEventListener("click", () => {
+        this.myReady = !this.myReady;
+        fresh.classList.toggle("ready-active", this.myReady);
+        fresh.textContent = this.myReady ? "READY (waiting)" : "READY";
+        room.send({ type: "set_ready", ready: this.myReady });
+      });
+    }
+    // Subscribe to state for roster updates.
+    this.stateUnsub = room.onMessage("state", (msg) => {
+      if (msg.phase === "playing") {
+        this.tearDownLobbySubs();
+        this.cbs.onGameStart(room, code);
+        return;
+      }
+      this.renderRoster(msg.players);
+    });
+    this.endedUnsub = room.onMessage("game_ended", () => {
+      this.tearDownLobbySubs();
+      this.cbs.onGameEnded();
+    });
+  }
+
+  private renderRoster(players: PlayerRosterEntry[]): void {
+    const ol = this.el.querySelector<HTMLOListElement>(".snek-mp-roster");
+    if (!ol) return;
+    ol.innerHTML = "";
+    for (const p of players) {
+      const li = document.createElement("li");
+      const hostTag = p.isHost ? '<span class="snek-mp-host-tag">HOST</span> ' : "";
+      const readyBadge = p.ready
+        ? '<span class="snek-mp-ready-check">READY</span>'
+        : '<span class="snek-mp-ready-not">not ready</span>';
+      li.innerHTML = `${hostTag}<span class="snek-mp-roster-name">${p.nickname || "ANO"}</span> ${readyBadge}`;
+      ol.appendChild(li);
+    }
+  }
+
+  private tearDownLobbySubs(): void {
+    this.stateUnsub?.();
+    this.endedUnsub?.();
+    this.stateUnsub = null;
+    this.endedUnsub = null;
   }
 
   private async handleHost(): Promise<void> {
@@ -76,7 +158,7 @@ export class MpModal {
       const { code } = await this.netClient.createRoom();
       this.setStatus(`joining ${code}...`);
       const room = await this.netClient.joinRoom(code, this.nickname, 0);
-      this.cbs.onJoined(room, code);
+      this.switchToLobby(room, code);
     } catch (err) {
       this.setStatus(`host failed: ${(err as Error).message}`);
       this.busy = false;
@@ -95,7 +177,7 @@ export class MpModal {
     this.setStatus(`joining ${code}...`);
     try {
       const room = await this.netClient.joinRoom(code, this.nickname, 0);
-      this.cbs.onJoined(room, code);
+      this.switchToLobby(room, code);
     } catch (err) {
       this.setStatus(`join failed: ${(err as Error).message}`);
       this.busy = false;

@@ -24,7 +24,17 @@ export type ClientMsg =
   | { type: "input_boost"; active: boolean }
   | { type: "respawn" }
   | { type: "leave" }
+  | { type: "set_ready"; ready: boolean }
   | { type: "client_log"; level: "info" | "warn" | "error"; msg: string };
+
+export interface PlayerRosterEntry {
+  sessionId: string;
+  snakeId: string;
+  nickname: string;
+  colorIdx: number;
+  ready: boolean;
+  isHost: boolean;
+}
 
 export type ServerMsg =
   | {
@@ -38,12 +48,15 @@ export type ServerMsg =
   | {
       type: "state";
       serverTime: number;
+      phase: "lobby" | "playing";
+      players: PlayerRosterEntry[];
       snakes: SnakeRenderState[];
       foods: FoodRenderState[];
     }
   | { type: "snake_died"; snakeId: string; killedBy: string | null }
   | { type: "snake_respawned"; snakeId: string }
   | { type: "food_eaten"; ids: string[] }
+  | { type: "game_ended"; reason: "host_left" }
   | { type: "error"; code: string; message: string };
 
 // Type guard for runtime dispatch
