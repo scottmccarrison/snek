@@ -1,6 +1,4 @@
 import { describe, expect, it, vi } from "vitest";
-import { SpatialHash } from "../../shared/spatialHash";
-import type { FoodItem } from "../food/foodSpawner";
 import { FoodSpawner } from "../food/foodSpawner";
 import { Snake } from "../snake/snake";
 import { tuning } from "../tuning";
@@ -20,9 +18,8 @@ function createSceneStub() {
 function makeSetup() {
   const events = { onSnakeDied: vi.fn() };
   const world = new World(events);
-  const hash = new SpatialHash<FoodItem>(80);
   const scene = createSceneStub();
-  const foodSpawner = new FoodSpawner(scene as unknown as Phaser.Scene, hash);
+  const foodSpawner = new FoodSpawner(scene as unknown as Phaser.Scene);
   // Add player snake.
   const player = new Snake(tuning.world.widthPx / 2, tuning.world.heightPx / 2, {
     id: "player",

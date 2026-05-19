@@ -1,7 +1,6 @@
 import * as Phaser from "phaser";
-import { SpatialHash } from "../../shared/spatialHash";
 import { SoundManager } from "../audio/sound";
-import { type FoodItem, FoodSpawner } from "../food/foodSpawner";
+import { FoodSpawner } from "../food/foodSpawner";
 import { PointerSteering } from "../input/pointer";
 import { BotManager } from "../sim/botManager";
 import { World } from "../sim/world";
@@ -20,7 +19,6 @@ export class GameScene extends Phaser.Scene {
   private snakeViews: Map<string, SnakeView> = new Map();
   private steering!: PointerSteering;
   private joystick!: JoystickIndicator;
-  private foodHash!: SpatialHash<FoodItem>;
   private foodSpawner!: FoodSpawner;
   private minimap!: Minimap;
   private soundManager!: SoundManager;
@@ -154,8 +152,7 @@ export class GameScene extends Phaser.Scene {
       },
     );
 
-    this.foodHash = new SpatialHash<FoodItem>(tuning.world.spatialBucketPx);
-    this.foodSpawner = new FoodSpawner(this, this.foodHash);
+    this.foodSpawner = new FoodSpawner(this);
     this.foodSpawner.update(this.world);
 
     // Set up bot manager with onBotSpawned callback to create views.
@@ -292,7 +289,6 @@ export class GameScene extends Phaser.Scene {
     this.steering.destroy();
     this.joystick.destroy();
     this.foodSpawner.destroy();
-    this.foodHash.clear();
     this.minimap.destroy();
     this.botManager.destroy();
     this.startGame();
