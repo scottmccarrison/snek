@@ -75,6 +75,22 @@ export class FoodSpawner {
     return false;
   }
 
+  /**
+   * Spawn pellets at exact positions - used for boost-shed segments.
+   * No jitter, no count math: each supplied position becomes one pellet.
+   * Pellets reuse tuning.death.pelletGrowthMultiplier so they behave
+   * identically to death pellets when eaten.
+   */
+  spawnPelletsAt(positions: ReadonlyArray<{ x: number; y: number }>): void {
+    for (const pos of positions) {
+      const id = `pellet-${this.nextId++}`;
+      const item: FoodItem = { id, x: pos.x, y: pos.y, isPellet: true };
+      this.foods.set(id, item);
+      this.hash.insert(id, item.x, item.y, item);
+    }
+    this.render();
+  }
+
   spawnPelletBurst(segments: ReadonlyArray<{ x: number; y: number }>): void {
     const count = Math.max(1, Math.floor(segments.length * tuning.death.pelletsPerSegment));
     const step = segments.length / count;

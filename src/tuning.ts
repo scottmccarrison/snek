@@ -12,6 +12,10 @@ export interface Tuning {
     bodyRadiusPx: number;
     maxBodyScale: number;
     scaleDivisor: number;
+    boostSpeedMultiplier: number;
+    boostDrainPerSec: number;
+    boostMinLength: number;
+    boostOutlineColor: number;
   };
   food: {
     targetCount: number;
@@ -116,6 +120,11 @@ export const tuning: Tuning = {
     // length 80 -> 1.45, length 320 -> 2.0, length 1280 -> 3.0, length 5120 -> 5.0.
     maxBodyScale: 5,
     scaleDivisor: 300,
+    // Boost mechanic (Phase 4).
+    boostSpeedMultiplier: 1.7, // speed multiplier while boost is active
+    boostDrainPerSec: 1.2, // segments shed per second of boost
+    boostMinLength: 8, // must exceed this to engage boost; drops out when reached
+    boostOutlineColor: 0xffeb3b, // hot yellow outline tint while boosting
   },
   food: {
     targetCount: 2000,
