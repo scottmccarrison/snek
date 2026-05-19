@@ -5,14 +5,13 @@
  * `mccarrison.me/snek/*`. A bare-prefix redirect `/snek` -> `/snek/` keeps
  * relative asset URLs inside index.html resolving cleanly.
  *
- * Phase 5 adds room creation + WebSocket upgrade routes; for now everything
- * non-redirect falls through to ASSETS.
+ * Phase 5 adds room creation + WebSocket upgrade routes.
  */
 
-interface Env {
-  PATH_PREFIX?: string;
-  ASSETS: { fetch(request: Request): Promise<Response> };
-}
+import { generateCode, isValidCode } from "./codegen";
+import type { Env } from "./room";
+
+export { Room } from "./room";
 
 export default {
   async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
@@ -23,6 +22,27 @@ export default {
     // the subpath route.
     if (url.pathname === prefix) {
       return Response.redirect(`${url.origin}${prefix}/`, 301);
+    }
+
+    // Room creation: POST /snek/api/room
+    // Generates a fresh 4-letter code and returns it. The Durable Object
+    // for that code spins up lazily on first WebSocket join.
+    if (url.pathname === `${prefix}/api/room` && request.method === "POST") {
+      const code = generateCode();
+      return new Response(JSON.stringify({ code }), {
+        headers: { "content-type": "application/json" },
+      });
+    }
+
+    // WebSocket upgrade: GET /snek/api/room/{CODE}
+    if (
+      url.pathname.startsWith(`${prefix}/api/room/`) &&
+      request.headers.get("Upgrade") === "websocket"
+    ) {
+      const code = url.pathname.split("/").pop()?.toUpperCase() ?? "";
+      if (!isValidCode(code)) return new Response("bad code", { status: 400 });
+      const id = env.ROOMS.idFromName(code);
+      return env.ROOMS.get(id).fetch(request);
     }
 
     // Strip the configured prefix so the asset bundle (keyed off
