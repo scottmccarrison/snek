@@ -2,7 +2,12 @@
 
 Browser-based snake.io / slither.io clone. Mobile-first (touch primary, keyboard secondary). Phaser 3 + Cloudflare Workers + Durable Objects.
 
-Live at https://mccarrison.me/snek/ (once Phase 0 ships).
+**Play it: https://mccarrison.me/snek/**
+
+Solo + bots MVP complete (Phases 0-4). Multiplayer (Phases 5-7) up next.
+
+Controls (mobile): drag-from-anywhere to steer, hold a second finger to boost.
+Controls (desktop): mouse to steer, hold Space to boost.
 
 ## Run locally
 
