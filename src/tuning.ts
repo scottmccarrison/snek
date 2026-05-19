@@ -101,7 +101,7 @@ export const tuning: Tuning = {
   snake: {
     speedPxPerSec: 180,
     spacingPx: 8,
-    turnRateRadPerSec: 11,
+    turnRateRadPerSec: 14,
     selfCollisionSkip: 6,
     initialLength: 20,
     headColor: 0x4caf50,
