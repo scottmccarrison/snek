@@ -13,7 +13,7 @@ Solo + bots first (Phases 0-4), then multiplayer (Phases 5-7). The game is "fun"
 | 2 | Larger world + camera + minimap | Done | [#23](https://github.com/scottmccarrison/snek/pull/23) | [phase-2-world-camera.md](plans/phase-2-world-camera.md) |
 | 3 | Bot snakes (FSM AI, snake-vs-snake, death-to-pellets) | Done | [#31](https://github.com/scottmccarrison/snek/pull/31) | [phase-3-bots.md](plans/phase-3-bots.md) |
 | 4 | Polish + feel (boost, HUD, death screen, audio, mobile touch) | Done | [#57](https://github.com/scottmccarrison/snek/pull/57) | [phase-4-polish.md](plans/phase-4-polish.md) |
-| 5 | MP foundation (CF Worker + DO + 20Hz tick + WS protocol + reconnect) | Todo | - | - |
+| 5 | MP foundation (CF Worker + DO + 20Hz tick + WS protocol + reconnect) | Done | [#62](https://github.com/scottmccarrison/snek/pull/62), [#63](https://github.com/scottmccarrison/snek/pull/63) | [phase-5-mp-foundation.md](plans/phase-5-mp-foundation.md) |
 | 6 | MP correctness (prediction, interpolation, lag comp, viewport culling, binary decision) | Todo | - | - |
 | 7 | MP feel + polish (server-side bots, killfeed, cross-room leaderboard, QR share, anti-grief) | Todo | - | - |
 
