@@ -252,7 +252,7 @@ export const tuning: Tuning = {
   },
   hud: {
     safeInsetPx: 24,
-    leaderboardCount: 5,
+    leaderboardCount: 10,
     textColor: 0xffffff,
     playerHighlightColor: 0xffeb3b,
     muteButtonSizePx: 44,
