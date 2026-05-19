@@ -11,8 +11,21 @@
  */
 
 import type * as Phaser from "phaser";
-import type { World } from "../sim/world";
 import { tuning } from "../tuning";
+
+// Minimap reads a thin slice of each snake: id, color, dead, head position.
+// Both client-side Snake instances and SnakeRenderState DTOs satisfy this
+// via thin adapters, so Minimap works in both solo and MP modes.
+export interface MinimapSnake {
+  id: string;
+  color: number;
+  segments: ReadonlyArray<{ x: number; y: number }>;
+  dead: boolean;
+}
+
+export interface MinimapWorld {
+  snakes: { values(): IterableIterator<MinimapSnake> };
+}
 
 export class Minimap {
   private graphics: Phaser.GameObjects.Graphics;
@@ -34,7 +47,7 @@ export class Minimap {
     };
   }
 
-  render(playerHeadX: number, playerHeadY: number, world: World): void {
+  render(playerHeadX: number, playerHeadY: number, world: MinimapWorld): void {
     const s = tuning.minimap.sizePx;
     const { sx, sy } = this.origin();
     this.graphics.clear();
