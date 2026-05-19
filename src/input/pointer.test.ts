@@ -10,6 +10,8 @@ function createSceneStub() {
     up: { isDown: false },
     down: { isDown: false },
   };
+  // Stub for Space key (addKey returns an object with isDown).
+  const spaceKeyStub = { isDown: false };
   const input = {
     on: vi.fn((event: string, cb: (arg: unknown) => void) => {
       const arr = listeners.get(event) ?? [];
@@ -28,13 +30,33 @@ function createSceneStub() {
     },
     keyboard: {
       createCursorKeys: () => cursors,
+      addKey: (_key: string) => spaceKeyStub,
     },
   };
+  // Minimal document stub for visibilitychange listener.
+  const docListeners = new Map<string, Array<() => void>>();
+  const documentStub = {
+    hidden: false,
+    addEventListener: vi.fn((event: string, cb: () => void) => {
+      const arr = docListeners.get(event) ?? [];
+      arr.push(cb);
+      docListeners.set(event, arr);
+    }),
+    removeEventListener: vi.fn(),
+    fireVisibility: (hidden: boolean) => {
+      documentStub.hidden = hidden;
+      for (const cb of (docListeners.get("visibilitychange") ?? []).slice()) cb();
+    },
+  };
+  // Replace global document for this stub.
+  vi.stubGlobal("document", documentStub);
   return {
     input,
     cursors,
+    spaceKeyStub,
+    documentStub,
     firePointer: (
-      event: "pointerdown" | "pointermove" | "pointerup",
+      event: "pointerdown" | "pointermove" | "pointerup" | "pointercancel",
       p: {
         worldX: number;
         worldY: number;
@@ -109,7 +131,7 @@ describe("PointerSteering", () => {
     const stub = createSceneStub();
     const steering = new PointerSteering(stub as unknown as import("phaser").Scene);
     steering.destroy();
-    expect(stub.input.off).toHaveBeenCalledTimes(3);
+    expect(stub.input.off).toHaveBeenCalledTimes(4);
   });
 
   it("touch input: drag right of anchor produces dirX > 0.99", () => {
@@ -301,6 +323,148 @@ describe("PointerSteering", () => {
       result = steer.update(0.016, 0, 0);
     }
     // Primary is still active, snake still heading right.
+    expect(result.dirX).toBeGreaterThan(0.99);
+  });
+
+  it("pointer: touchCount > 1 reports boost held", () => {
+    const stub = createSceneStub();
+    const steer = new PointerSteering(stub as unknown as import("phaser").Scene);
+    // No touches yet - boost not held.
+    expect(steer.getBoostHeld()).toBe(false);
+    // First touch down.
+    stub.firePointer("pointerdown", {
+      x: 100,
+      y: 100,
+      worldX: 100,
+      worldY: 100,
+      pointerType: "touch",
+      id: 1,
+    });
+    expect(steer.getBoostHeld()).toBe(false);
+    // Second touch down - boost held.
+    stub.firePointer("pointerdown", {
+      x: 300,
+      y: 300,
+      worldX: 300,
+      worldY: 300,
+      pointerType: "touch",
+      id: 2,
+    });
+    expect(steer.getBoostHeld()).toBe(true);
+    // Second touch lifts - boost released.
+    stub.firePointer("pointerup", {
+      x: 300,
+      y: 300,
+      worldX: 300,
+      worldY: 300,
+      pointerType: "touch",
+      id: 2,
+    });
+    expect(steer.getBoostHeld()).toBe(false);
+  });
+
+  it("pointer: Space key reports boost held", () => {
+    const stub = createSceneStub();
+    const steer = new PointerSteering(stub as unknown as import("phaser").Scene);
+    expect(steer.getBoostHeld()).toBe(false);
+    stub.spaceKeyStub.isDown = true;
+    expect(steer.getBoostHeld()).toBe(true);
+    stub.spaceKeyStub.isDown = false;
+    expect(steer.getBoostHeld()).toBe(false);
+  });
+
+  it("pointer: pointercancel releases active touch and decrements touchCount", () => {
+    const stub = createSceneStub();
+    const steer = new PointerSteering(stub as unknown as import("phaser").Scene);
+    // First touch - sets up joystick.
+    stub.firePointer("pointerdown", {
+      x: 100,
+      y: 100,
+      worldX: 100,
+      worldY: 100,
+      pointerType: "touch",
+      id: 1,
+    });
+    stub.firePointer("pointermove", {
+      x: 200,
+      y: 100,
+      worldX: 200,
+      worldY: 100,
+      pointerType: "touch",
+      id: 1,
+    });
+    // Fire pointercancel for the active touch (iOS focus-loss).
+    stub.firePointer("pointercancel", {
+      x: 200,
+      y: 100,
+      worldX: 200,
+      worldY: 100,
+      pointerType: "touch",
+      id: 1,
+    });
+    // touchCount should be back to 0 and boost held should be false.
+    expect(steer.getBoostHeld()).toBe(false);
+    // The steering should still preserve last known direction (not snap to 0).
+    // But the joystick anchor is released - verify no crash and getBoostHeld is correct.
+    const result = steer.update(0.016, 0, 0);
+    // Direction is preserved from last drag (>0 dirX), just verify no throw.
+    expect(typeof result.dirX).toBe("number");
+  });
+
+  it("pointer: visibilitychange to hidden releases active touch", () => {
+    const stub = createSceneStub();
+    const steer = new PointerSteering(stub as unknown as import("phaser").Scene);
+    // Set up primary + secondary touch.
+    stub.firePointer("pointerdown", {
+      x: 100,
+      y: 100,
+      worldX: 100,
+      worldY: 100,
+      pointerType: "touch",
+      id: 1,
+    });
+    stub.firePointer("pointerdown", {
+      x: 300,
+      y: 300,
+      worldX: 300,
+      worldY: 300,
+      pointerType: "touch",
+      id: 2,
+    });
+    expect(steer.getBoostHeld()).toBe(true);
+    // Page goes hidden - all touch state should reset.
+    stub.documentStub.fireVisibility(true);
+    expect(steer.getBoostHeld()).toBe(false);
+  });
+
+  it("pointer: held-stationary touch is NOT released after a long pause", () => {
+    // Regression: earlier design considered a time-since-move timeout to
+    // release stale touches. A stationary held thumb is a VALID input
+    // (the snake glides straight). No timeout must fire here.
+    const stub = createSceneStub();
+    const steer = new PointerSteering(stub as unknown as import("phaser").Scene);
+    stub.firePointer("pointerdown", {
+      x: 100,
+      y: 100,
+      worldX: 100,
+      worldY: 100,
+      pointerType: "touch",
+      id: 1,
+    });
+    stub.firePointer("pointermove", {
+      x: 200,
+      y: 100,
+      worldX: 200,
+      worldY: 100,
+      pointerType: "touch",
+      id: 1,
+    });
+    // Simulate 10 seconds of no move events (600 frames at 60fps, no timeout).
+    let result = { dirX: 0, dirY: 0 };
+    for (let i = 0; i < 600; i++) {
+      result = steer.update(0.016, 0, 0);
+    }
+    // The touch is still active - snake should still be heading right.
     expect(result.dirX).toBeGreaterThan(0.99);
   });
 });

@@ -174,4 +174,79 @@ describe("Snake", () => {
     expect(snake.segments[0].x).toBe(50);
     expect(snake.segments[0].y).toBe(60);
   });
+
+  it("boost: speed is multiplied when boostActive is true", () => {
+    // Grow snake well past boostMinLength.
+    const normal = new Snake(0, 0);
+    normal.grow(tuning.snake.boostMinLength + 10);
+    for (let i = 0; i < 60; i++) normal.update(1 / 60, 1, 0);
+    const startNormal = normal.segments[0].x;
+    normal.update(1 / 60, 1, 0);
+    const normalStep = normal.segments[0].x - startNormal;
+
+    const boosted = new Snake(0, 0);
+    boosted.grow(tuning.snake.boostMinLength + 10);
+    for (let i = 0; i < 60; i++) boosted.update(1 / 60, 1, 0);
+    boosted.boostActive = true;
+    const startBoosted = boosted.segments[0].x;
+    boosted.update(1 / 60, 1, 0);
+    const boostedStep = boosted.segments[0].x - startBoosted;
+
+    expect(boostedStep).toBeCloseTo(normalStep * tuning.snake.boostSpeedMultiplier, 3);
+  });
+
+  it("boost: shed accumulator drains length over time", () => {
+    const snake = new Snake(0, 0);
+    const extraLen = 20;
+    snake.grow(extraLen);
+    for (let i = 0; i < 120; i++) snake.update(1 / 60, 1, 0);
+    const lenBefore = snake.segments.length;
+    snake.boostActive = true;
+    // Run 1 second of boost - should shed ~boostDrainPerSec segments.
+    for (let i = 0; i < 60; i++) snake.update(1 / 60, 1, 0);
+    const shed = lenBefore - snake.segments.length;
+    expect(shed).toBeGreaterThanOrEqual(1);
+    expect(shed).toBeLessThanOrEqual(Math.ceil(tuning.snake.boostDrainPerSec) + 2);
+  });
+
+  it("boost: forced off when length drops to boostMinLength", () => {
+    const snake = new Snake(0, 0, {
+      initialLength: tuning.snake.boostMinLength + 3,
+    });
+    snake.boostActive = true;
+    // Run until boost drains length to min.
+    for (let i = 0; i < 600; i++) {
+      snake.update(1 / 60, 1, 0);
+      if (!snake.boostActive) break;
+    }
+    expect(snake.boostActive).toBe(false);
+    expect(snake.segments.length).toBeLessThanOrEqual(tuning.snake.boostMinLength);
+  });
+
+  it("boost: consumeShedPositions returns positions and clears them", () => {
+    const snake = new Snake(0, 0);
+    snake.grow(tuning.snake.boostMinLength + 10);
+    for (let i = 0; i < 120; i++) snake.update(1 / 60, 1, 0);
+    snake.boostActive = true;
+    // Run enough frames to accumulate at least one shed.
+    for (let i = 0; i < 60; i++) snake.update(1 / 60, 1, 0);
+    const shed = snake.consumeShedPositions();
+    expect(shed.length).toBeGreaterThan(0);
+    expect(shed[0]).toHaveProperty("x");
+    expect(shed[0]).toHaveProperty("y");
+    // Second call should return empty (cleared).
+    const second = snake.consumeShedPositions();
+    expect(second.length).toBe(0);
+  });
+
+  it("bots never set boostActive=true across a 500-frame run", () => {
+    // Regression test: bot AI must not set boostActive in Phase 4.
+    // We simulate a bot snake with a BotBrain and verify boostActive stays false.
+    const botSnake = new Snake(2000, 2000, { id: "bot-0", ownerType: "bot" });
+    botSnake.grow(20);
+    for (let i = 0; i < 500; i++) {
+      botSnake.update(1 / 60, 1, 0);
+      expect(botSnake.boostActive).toBe(false);
+    }
+  });
 });

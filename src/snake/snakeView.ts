@@ -44,20 +44,26 @@ export class SnakeView {
       this.fadeFraction,
     );
     const outlineExtra = this.options?.outlineExtraPx ?? 0;
-    const outlineColor = this.options?.outlineColor ?? 0xffffff;
+    // While boosting, override the outline color with a hot yellow glow.
+    const outlineColor = this.snake.boostActive
+      ? tuning.snake.boostOutlineColor
+      : (this.options?.outlineColor ?? 0xffffff);
     const outlineAlpha = this.options?.outlineAlpha ?? 0.3;
+    // Boost glow uses a wider outline ring for visual clarity.
+    const boostGlowExtra = this.snake.boostActive ? 3 : 0;
     const segs = this.snake.segments;
     const headR = this.snake.headRadius;
     const bodyR = this.snake.bodyRadius;
     // Outline grows proportionally with body scale so it stays visible
     // on bigger snakes.
-    const outlineScaled = outlineExtra * this.snake.scale;
+    const outlineScaled = (outlineExtra + boostGlowExtra) * this.snake.scale;
+    const hasOutline = outlineExtra > 0 || this.snake.boostActive;
     // Draw from tail to head so head renders on top.
     for (let i = segs.length - 1; i >= 0; i--) {
       const s = segs[i];
       const isHead = i === 0;
       const radius = isHead ? headR : bodyR;
-      if (outlineExtra > 0) {
+      if (hasOutline) {
         this.graphics.fillStyle(outlineColor, outlineAlpha);
         this.graphics.fillCircle(s.x, s.y, radius + outlineScaled);
       }
