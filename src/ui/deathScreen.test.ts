@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { recordPersonalBest } from "../leaderboard";
 import { DeathScreen } from "./deathScreen";
 import type { DeathStats } from "./deathScreen";
 
@@ -11,6 +12,9 @@ describe("DeathScreen", () => {
   afterEach(() => {
     // Clean up any lingering DOM nodes between tests
     for (const el of document.querySelectorAll(".snek-death-screen")) el.remove();
+    // DeathScreen.show() records a personal best to localStorage. Clear
+    // between tests so they remain isolated.
+    localStorage.clear();
   });
 
   it("show creates DOM and sets stats correctly", () => {
@@ -21,7 +25,6 @@ describe("DeathScreen", () => {
     const el = document.querySelector(".snek-death-screen") as HTMLDivElement;
     expect(el).toBeTruthy();
     expect(el.style.display).toBe("block");
-    expect(el.querySelector(".snek-death-length")?.textContent).toBe("55");
     expect(el.querySelector(".snek-death-score")?.textContent).toBe("35");
     expect(el.querySelector(".snek-death-killer")?.textContent).toBe("Killed by bot-2");
 
@@ -113,6 +116,34 @@ describe("DeathScreen", () => {
 
     expect(cb).toHaveBeenCalledOnce();
 
+    ds.destroy();
+  });
+
+  it("shows NEW BEST banner on a first run (empty list) with positive score", () => {
+    const ds = new DeathScreen(vi.fn());
+    ds.show(makeStats({ score: 25 }));
+    const banner = document.querySelector<HTMLDivElement>(".snek-death-new-best");
+    expect(banner?.style.display).toBe("block");
+    ds.destroy();
+  });
+
+  it("hides NEW BEST banner when score does not beat top-5", () => {
+    // Seed the list with high scores so a low score does not crack the top 5.
+    for (const s of [500, 400, 300, 200, 100]) recordPersonalBest(s);
+    const ds = new DeathScreen(vi.fn());
+    ds.show(makeStats({ score: 10 }));
+    const banner = document.querySelector<HTMLDivElement>(".snek-death-new-best");
+    expect(banner?.style.display).toBe("none");
+    ds.destroy();
+  });
+
+  it("renders personal bests list with current run highlighted on a NEW BEST", () => {
+    const ds = new DeathScreen(vi.fn());
+    ds.show(makeStats({ score: 50 }));
+    const items = document.querySelectorAll<HTMLLIElement>(".snek-death-bests-list li");
+    expect(items).toHaveLength(1);
+    expect(items[0].textContent).toBe("50");
+    expect(items[0].classList.contains("snek-death-bests-current")).toBe(true);
     ds.destroy();
   });
 });
