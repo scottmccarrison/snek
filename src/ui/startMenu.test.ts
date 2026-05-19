@@ -68,9 +68,11 @@ describe("StartMenu", () => {
     menu.show();
     const input = document.querySelector<HTMLInputElement>(".snek-start-name");
     if (!input) throw new Error("input not found");
+    // Initials are normalized to A-Z uppercase, capped at 3.
+    // "Scott" -> "SCO" (lowercase letters uppercased, 4+ chars truncated).
     input.value = "Scott";
     input.dispatchEvent(new Event("input"));
-    expect(localStorage.getItem("snek.playerName")).toBe("Scott");
+    expect(localStorage.getItem("snek.playerName")).toBe("SCO");
     menu.destroy();
   });
 

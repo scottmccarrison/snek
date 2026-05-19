@@ -11,6 +11,12 @@
 
 import { type PersonalBest, getPersonalBests, getStoredName, setStoredName } from "../leaderboard";
 
+const INITIALS_MAX = 3;
+function normalizeInitials(input: string): string {
+  const s = input.toUpperCase().replace(/[^A-Z]/g, "");
+  return s.length > INITIALS_MAX ? s.slice(0, INITIALS_MAX) : s;
+}
+
 export class StartMenu {
   private el: HTMLDivElement;
   private nameInput: HTMLInputElement;
@@ -34,8 +40,8 @@ export class StartMenu {
       <h1>snek</h1>
       <p class="snek-start-tagline">drag to steer. hold second finger to boost.</p>
       <label class="snek-start-name-row">
-        Name
-        <input class="snek-start-name" type="text" maxlength="12" placeholder="anon" autocomplete="off" />
+        Initials
+        <input class="snek-start-name" type="text" maxlength="3" placeholder="ABC" autocomplete="off" autocapitalize="characters" pattern="[A-Za-z]{1,3}" />
       </label>
       <div class="snek-start-bests">
         <div class="snek-start-bests-title">Your top runs</div>
@@ -56,9 +62,14 @@ export class StartMenu {
     this.playBtn = playBtn;
     this.pbList = pbList;
 
-    this.nameInput.value = getStoredName();
+    this.nameInput.value = normalizeInitials(getStoredName());
     this.nameInput.addEventListener("input", () => {
-      setStoredName(this.nameInput.value);
+      // Force uppercase A-Z only, cap at 3. Match the server's
+      // normalizeNickname contract so the input shows exactly what gets
+      // sent.
+      const cleaned = normalizeInitials(this.nameInput.value);
+      if (this.nameInput.value !== cleaned) this.nameInput.value = cleaned;
+      setStoredName(cleaned);
     });
     // Block keyboard events from bubbling into the game (Space, arrow keys).
     this.nameInput.addEventListener("keydown", (e) => e.stopPropagation());

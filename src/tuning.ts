@@ -128,7 +128,7 @@ export const tuning: Tuning = {
     resumeTokenTtlSec: 60,
     maxInputsPerSecPerClient: 60,
     maxClientLogPerSecPerSocket: 30,
-    nicknameMaxLen: 16,
+    nicknameMaxLen: 3,
   },
   snake: {
     speedPxPerSec: 180,
