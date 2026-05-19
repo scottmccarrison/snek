@@ -195,7 +195,12 @@ export class BotBrain {
       const turnRadius = tuning.snake.speedPxPerSec / tuning.snake.turnRateRadPerSec;
       const segmentsPerTurn = Math.ceil((2 * Math.PI * turnRadius) / tuning.snake.spacingPx);
       const selfSkip = tuning.snake.selfCollisionSkip + segmentsPerTurn;
-      for (let i = selfSkip; i < snake.segments.length; i++) {
+      // Cap the scan range. Risky self-collision segments are within roughly
+      // 2 wraparounds of the head. Beyond that, segments are far behind in
+      // any normal trajectory. Capping saves an O(N) scan per cache miss for
+      // long snakes (was a real cost at scale 5 with 1000+ segments).
+      const selfScanCap = Math.min(snake.segments.length, selfSkip + segmentsPerTurn * 2);
+      for (let i = selfSkip; i < selfScanCap; i++) {
         const s = snake.segments[i];
         const dx = s.x - head.x;
         const dy = s.y - head.y;

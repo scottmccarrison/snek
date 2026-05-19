@@ -92,13 +92,22 @@ export class HUD {
   private mute: MuteController;
   private playerId: string;
   private graphics: Phaser.GameObjects.Graphics;
-  private lengthText: Phaser.GameObjects.Text;
   private scoreText: Phaser.GameObjects.Text;
   private leaderboardTexts: Phaser.GameObjects.Text[] = [];
-  private muteIcon: Phaser.GameObjects.Text;
+  // Drawn speaker icon for mute (Phaser Graphics, not text - emoji rendering
+  // is inconsistent across platforms and [ON]/[OFF] read as a debug toggle).
+  private muteIconGraphics: Phaser.GameObjects.Graphics;
   // Cached viewport dimensions for hit-testing.
   private viewportW: number;
   private viewportH: number;
+  // Cached last-rendered values so setText only fires when the value changed.
+  // Phaser Text recreates its GPU texture on every setText - on mobile this
+  // shows up as periodic hitching. Caching cuts the upload cost to near zero
+  // during steady-state play.
+  private lastScore = -1;
+  private lastRowTexts: string[] = [];
+  private lastRowColors: string[] = [];
+  private lastMuted: boolean | null = null;
 
   constructor(scene: Phaser.Scene, mute: MuteController, playerId = "player") {
     this.mute = mute;
@@ -115,21 +124,13 @@ export class HUD {
     this.graphics = scene.add.graphics();
     this.graphics.setScrollFactor(0).setDepth(depth);
 
-    // Top-left: length (large) and score (smaller)
-    this.lengthText = scene.add
+    // Top-left: score only. Length was removed in polish pass - score is
+    // the meaningful progress metric (pellets eaten).
+    this.scoreText = scene.add
       .text(inset, inset, "", {
         fontFamily: "system-ui, sans-serif",
         fontSize: "32px",
         fontStyle: "bold",
-        color: colorHex,
-      })
-      .setScrollFactor(0)
-      .setDepth(depth + 1);
-
-    this.scoreText = scene.add
-      .text(inset, inset + 38, "", {
-        fontFamily: "system-ui, sans-serif",
-        fontSize: "16px",
         color: colorHex,
       })
       .setScrollFactor(0)
@@ -148,40 +149,86 @@ export class HUD {
         .setDepth(depth + 1)
         .setVisible(false);
       this.leaderboardTexts.push(t);
+      this.lastRowTexts.push("");
+      this.lastRowColors.push("");
     }
 
-    // Bottom-left: mute button
-    const muteY = height - inset - tuning.hud.muteButtonSizePx;
-    this.muteIcon = scene.add
-      .text(inset, muteY, this.getMuteGlyph(), {
-        fontFamily: "system-ui, sans-serif",
-        fontSize: "28px",
-        color: colorHex,
-        backgroundColor: "rgba(0,0,0,0.45)",
-        padding: { left: 6, right: 6, top: 4, bottom: 4 },
-      })
-      .setScrollFactor(0)
-      .setDepth(depth + 1)
-      .setInteractive({ useHandCursor: true });
+    // Bottom-left: mute button drawn as a speaker icon.
+    this.muteIconGraphics = scene.add.graphics();
+    this.muteIconGraphics.setScrollFactor(0).setDepth(depth + 1);
+    this.drawMuteIcon();
 
     scene.input.on("pointerdown", (p: Phaser.Input.Pointer) => {
       if (this.hitsMuteButton(p.x, p.y)) {
         this.mute.toggleMute();
-        this.muteIcon.setText(this.getMuteGlyph());
+        this.drawMuteIcon();
       }
     });
   }
 
-  private getMuteGlyph(): string {
-    return this.mute.isMuted() ? "[OFF]" : "[ON]";
+  private drawMuteIcon(): void {
+    const muted = this.mute.isMuted();
+    if (this.lastMuted === muted) return;
+    this.lastMuted = muted;
+
+    const g = this.muteIconGraphics;
+    g.clear();
+
+    const inset = tuning.hud.safeInsetPx;
+    const size = tuning.hud.muteButtonSizePx;
+    const x = inset;
+    const y = this.viewportH - inset - size;
+
+    // Translucent background pad so the icon is visible on any world bg.
+    g.fillStyle(0x000000, 0.45);
+    g.fillRoundedRect(x, y, size, size, 6);
+
+    const iconColor = muted ? 0xff5555 : 0xffffff;
+    const cx = x + size / 2;
+    const cy = y + size / 2;
+    const s = size * 0.36; // half-size of icon body
+
+    // Speaker body: a rectangle (left half) + trapezoid (right half).
+    g.fillStyle(iconColor, 1);
+    g.beginPath();
+    g.moveTo(cx - s, cy - s * 0.4);
+    g.lineTo(cx - s * 0.3, cy - s * 0.4);
+    g.lineTo(cx + s * 0.2, cy - s);
+    g.lineTo(cx + s * 0.2, cy + s);
+    g.lineTo(cx - s * 0.3, cy + s * 0.4);
+    g.lineTo(cx - s, cy + s * 0.4);
+    g.closePath();
+    g.fillPath();
+
+    if (muted) {
+      // Diagonal slash through the speaker.
+      g.lineStyle(3, 0xff5555, 1);
+      g.beginPath();
+      g.moveTo(x + size * 0.18, y + size * 0.18);
+      g.lineTo(x + size * 0.82, y + size * 0.82);
+      g.strokePath();
+    } else {
+      // Two sound waves to the right of the speaker.
+      g.lineStyle(2, iconColor, 1);
+      const waveX1 = cx + s * 0.4;
+      const waveX2 = cx + s * 0.7;
+      g.beginPath();
+      g.arc(waveX1, cy, s * 0.3, -Math.PI / 3, Math.PI / 3, false);
+      g.strokePath();
+      g.beginPath();
+      g.arc(waveX2, cy, s * 0.55, -Math.PI / 3, Math.PI / 3, false);
+      g.strokePath();
+    }
   }
 
   render(player: Snake, world: World): void {
     const length = player.segments.length;
     const score = Math.max(0, length - tuning.snake.initialLength);
 
-    this.lengthText.setText(`Length ${length}`);
-    this.scoreText.setText(`Score ${score}`);
+    if (score !== this.lastScore) {
+      this.scoreText.setText(`Score ${score}`);
+      this.lastScore = score;
+    }
 
     // Leaderboard
     const rows = computeLeaderboard(
@@ -194,26 +241,31 @@ export class HUD {
     const inset = tuning.hud.safeInsetPx;
     const rowH = 18;
     const leaderX = this.viewportW - inset - 160;
+    const highlightHex = `#${tuning.hud.playerHighlightColor.toString(16).padStart(6, "0")}`;
+    const normalHex = `#${tuning.hud.textColor.toString(16).padStart(6, "0")}`;
 
     for (let i = 0; i < this.leaderboardTexts.length; i++) {
       const t = this.leaderboardTexts[i];
       if (i >= rows.length) {
-        t.setVisible(false);
+        if (t.visible) t.setVisible(false);
         continue;
       }
       const row = rows[i];
-      t.setVisible(true);
+      if (!t.visible) t.setVisible(true);
       t.setPosition(leaderX, inset + i * rowH);
 
-      if (row.isPlaceholder) {
-        t.setText("...");
-        t.setColor("#aaaaaa");
-      } else {
-        const label = row.isPlayer ? "YOU" : row.id.slice(0, 8);
-        t.setText(`#${row.rank} ${label} ${row.length}`);
-        const highlightHex = `#${tuning.hud.playerHighlightColor.toString(16).padStart(6, "0")}`;
-        const normalHex = `#${tuning.hud.textColor.toString(16).padStart(6, "0")}`;
-        t.setColor(row.isPlayer ? highlightHex : normalHex);
+      const text = row.isPlaceholder
+        ? "..."
+        : `#${row.rank} ${row.isPlayer ? "YOU" : row.id.slice(0, 8)} ${row.length}`;
+      const color = row.isPlaceholder ? "#aaaaaa" : row.isPlayer ? highlightHex : normalHex;
+
+      if (this.lastRowTexts[i] !== text) {
+        t.setText(text);
+        this.lastRowTexts[i] = text;
+      }
+      if (this.lastRowColors[i] !== color) {
+        t.setColor(color);
+        this.lastRowColors[i] = color;
       }
     }
   }
@@ -224,9 +276,8 @@ export class HUD {
 
   destroy(): void {
     this.graphics.destroy();
-    this.lengthText.destroy();
     this.scoreText.destroy();
     for (const t of this.leaderboardTexts) t.destroy();
-    this.muteIcon.destroy();
+    this.muteIconGraphics.destroy();
   }
 }
