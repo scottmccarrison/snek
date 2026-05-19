@@ -4,6 +4,7 @@ export interface Tuning {
     viewRadiusPx: number;
     maxHumansPerRoom: number;
     minSnakesPerRoom: number;
+    totalSnakesPerRoom: number;
     resumeTokenTtlSec: number;
     maxInputsPerSecPerClient: number;
     maxClientLogPerSecPerSocket: number;
@@ -125,6 +126,7 @@ export const tuning: Tuning = {
     viewRadiusPx: 800,
     maxHumansPerRoom: 8,
     minSnakesPerRoom: 6,
+    totalSnakesPerRoom: 10,
     resumeTokenTtlSec: 60,
     maxInputsPerSecPerClient: 60,
     maxClientLogPerSecPerSocket: 30,

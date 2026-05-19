@@ -8,6 +8,7 @@ export interface SnakeRenderState {
   segments: Array<{ x: number; y: number }>;
   boostActive: boolean;
   scale: number; // pre-computed so client doesn't redo log/sqrt math
+  nickname?: string; // populated for bots by ServerBotManager; human nicknames come via the players roster
 }
 
 export interface FoodRenderState {

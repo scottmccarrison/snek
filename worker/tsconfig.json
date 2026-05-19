@@ -21,6 +21,7 @@
     "src/**/*",
     "../shared/**/*",
     "../src/snake/snake.ts",
+    "../src/snake/botBrain.ts",
     "../src/sim/world.ts",
     "../src/tuning.ts"
   ],

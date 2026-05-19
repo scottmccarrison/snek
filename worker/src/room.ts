@@ -14,6 +14,7 @@ import { type ClientMsg, type ServerMsg, isClientMsg } from "../../shared/protoc
 import { tuning } from "../../src/tuning";
 import { isValidCode } from "./codegen";
 import { isValidAngle, isValidBoolean, isValidColorIdx, normalizeNickname } from "./sanitize";
+import { type SerializedServerBotManager, ServerBotManager } from "./sim/serverBotManager";
 import { type SimEvent, SnakeSim } from "./sim/snakeSim";
 
 export interface Env {
@@ -50,6 +51,7 @@ export class Room {
   private env: Env;
   private code = "";
   private sim: SnakeSim | null = null;
+  private botManager: ServerBotManager | null = null;
   // sessionId -> token info
   private resumeTokens = new Map<string, PersistedResumeToken>();
   private tickInProgress = false;
@@ -277,6 +279,8 @@ export class Room {
       }
       // Reset room state - sim, phase, readyStates, host, playerMeta, resumeTokens all cleared.
       this.sim = null;
+      this.botManager?.clear();
+      this.botManager = null;
       this.phase = "lobby";
       this.hostSessionId = null;
       this.readyStates.clear();
@@ -284,6 +288,7 @@ export class Room {
       this.resumeTokens.clear();
       await this.state.storage.delete("sim");
       await this.state.storage.delete("resumeTokens");
+      await this.state.storage.delete("botManager");
       await this.persistState();
     }
   }
@@ -303,7 +308,10 @@ export class Room {
         // Idle teardown: no live sockets and no pending reconnects.
         await this.state.storage.delete("sim");
         await this.state.storage.delete("resumeTokens");
+        await this.state.storage.delete("botManager");
         this.sim = null;
+        this.botManager?.clear();
+        this.botManager = null;
         return; // do NOT reschedule
       }
 
@@ -323,6 +331,18 @@ export class Room {
       if (this.phase === "playing" && this.sim) {
         // Normal tick.
         const fixedDt = 1 / tuning.net.serverTickHz;
+
+        // Drive bots BEFORE sim.tick so their pendingDir is set when Snake.update runs.
+        const liveSessionIds = new Set<string>();
+        for (const ws of sockets) {
+          const att = ws.deserializeAttachment() as SocketAttachment | null;
+          if (att) liveSessionIds.add(att.sessionId);
+        }
+        const humanSnakeCount = liveSessionIds.size;
+        if (this.botManager) {
+          this.botManager.update(this.sim, humanSnakeCount, fixedDt);
+        }
+
         const events = this.sim.tick(fixedDt);
         // Track respawn cooldowns from death events.
         for (const e of events) {
@@ -333,6 +353,7 @@ export class Room {
         await this.broadcastState();
         this.broadcastEvents(events);
         await this.persistSim();
+        await this.persistBotManager();
       } else {
         // Lobby phase: no sim tick, but broadcast state so clients see roster.
         await this.broadcastState();
@@ -356,6 +377,10 @@ export class Room {
       if (this.env.DEBUG_LOG) console.log(this.debugTag(), "ensureSim seed=", seed);
       this.sim = new SnakeSim(seed);
     }
+    if (!this.botManager) {
+      const botSeed = Math.floor(Math.random() * 0x7fffffff);
+      this.botManager = new ServerBotManager(botSeed);
+    }
     return this.sim;
   }
 
@@ -364,6 +389,10 @@ export class Room {
     if (storedCode) this.code = storedCode;
     const storedSim = await this.state.storage.get<ReturnType<SnakeSim["serialize"]>>("sim");
     if (storedSim) this.sim = SnakeSim.restore(storedSim);
+    const storedBot = await this.state.storage.get<SerializedServerBotManager>("botManager");
+    if (storedBot && this.sim) {
+      this.botManager = ServerBotManager.restore(storedBot, this.sim);
+    }
     const storedTokens =
       await this.state.storage.get<Record<string, PersistedResumeToken>>("resumeTokens");
     if (storedTokens) {
@@ -393,6 +422,11 @@ export class Room {
   private async persistSim(): Promise<void> {
     if (!this.sim) return;
     await this.state.storage.put("sim", this.sim.serialize());
+  }
+
+  private async persistBotManager(): Promise<void> {
+    if (!this.botManager) return;
+    await this.state.storage.put("botManager", this.botManager.serialize());
   }
 
   private async persistTokens(): Promise<void> {
@@ -437,13 +471,26 @@ export class Room {
     if (!this.sim) return;
     const players = this.buildPlayersList();
     const sockets = this.state.getWebSockets();
+
+    // Build the combined nickname lookup: human nicknames from playerMeta +
+    // bot nicknames from botManager.
+    const botNicknames = this.botManager?.getNicknames();
+    const nicknameLookup = (id: string): string | undefined => {
+      // Human snakes have id "p_<sessionId>". Look up via playerMeta.
+      if (id.startsWith("p_")) {
+        const sessionId = id.slice(2);
+        return this.playerMeta.get(sessionId)?.nickname;
+      }
+      return botNicknames?.get(id);
+    };
+
     for (const ws of sockets) {
       const attachment = ws.deserializeAttachment() as SocketAttachment | null;
       if (!attachment) continue;
       const snake = this.sim.world.snakes.get(attachment.snakeId);
       const cullCx = snake ? snake.segments[0].x : tuning.world.widthPx / 2;
       const cullCy = snake ? snake.segments[0].y : tuning.world.heightPx / 2;
-      const snap = this.sim.snapshot(cullCx, cullCy);
+      const snap = this.sim.snapshot(cullCx, cullCy, nicknameLookup);
       const stateMsg: ServerMsg = {
         type: "state",
         serverTime: Date.now(),

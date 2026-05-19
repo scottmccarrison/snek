@@ -452,14 +452,15 @@ export class GameScene extends Phaser.Scene {
         dead: !s.alive,
       }));
       const viewWorld = { snakes: { values: () => viewSnakes.values() } };
-      // MP nickname lookup: read from the roster map built from state
-      // messages. Players show their initials; unknown ids (server-side
-      // bots in Phase 7) fall back to 'BOT'.
+      // Build a per-frame snakeId -> nickname map combining the roster (humans)
+      // and the snapshot (bots). Snapshot nickname takes precedence for bot
+      // ids so server-assigned labels ('BO1', 'BO2', ...) are shown.
+      const snapNicks = new Map<string, string>();
+      for (const s of this.lastSnapshot.snakes) {
+        if (s.nickname) snapNicks.set(s.id, s.nickname);
+      }
       const lookup = (id: string): string | undefined => {
-        const n = this.mpNicknames.get(id);
-        if (n) return n;
-        if (id.startsWith("bot")) return "BOT";
-        return undefined;
+        return this.mpNicknames.get(id) ?? snapNicks.get(id);
       };
       this.hud.render({ segments: { length: playerState.segments.length } }, viewWorld, lookup);
       this.minimap.render(head.x, head.y, viewWorld);

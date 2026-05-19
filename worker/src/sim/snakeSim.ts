@@ -72,6 +72,15 @@ export class SnakeSim {
     this.world.removeSnake(snakeId);
   }
 
+  addBot(snakeId: string, color: number, startX: number, startY: number): void {
+    const snake = new Snake(startX, startY, {
+      id: snakeId,
+      ownerType: "bot",
+      color,
+    });
+    this.world.addSnake(snake);
+  }
+
   // Validates input. Rejects NaN, Infinity, out-of-range. Server returns
   // false to indicate the input was rejected (caller may log/rate-limit).
   applyInput(snakeId: string, input: { angle?: number; boostActive?: boolean }): boolean {
@@ -120,6 +129,7 @@ export class SnakeSim {
   snapshot(
     cullCenterX: number,
     cullCenterY: number,
+    nicknameLookup?: (id: string) => string | undefined,
   ): { snakes: SnakeRenderState[]; foods: FoodRenderState[] } {
     const cullR = tuning.net.viewRadiusPx;
     const cullR2 = cullR * cullR;
@@ -138,6 +148,7 @@ export class SnakeSim {
         segments: snake.segments.map((s) => ({ x: s.x, y: s.y })),
         boostActive: snake.boostActive,
         scale: snake.scale,
+        nickname: nicknameLookup?.(snake.id),
       });
     }
     const foodItems = this.foodState.queryWithin(cullCenterX, cullCenterY, cullR);
