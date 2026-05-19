@@ -209,6 +209,31 @@ export class BotBrain {
         }
       }
     }
+    // Wall avoidance: treat the nearest point on each world edge as a
+    // virtual threat. Forward-hemisphere filter means the bot only flees
+    // when actually heading at a wall (parallel or away = no flee). Without
+    // this, a bot that's fleeing a body threat can be pushed straight into
+    // the edge with no warning.
+    const wallPoints = [
+      { x: 0, y: head.y },
+      { x: tuning.world.widthPx, y: head.y },
+      { x: head.x, y: 0 },
+      { x: head.x, y: tuning.world.heightPx },
+    ];
+    for (const w of wallPoints) {
+      const dx = w.x - head.x;
+      const dy = w.y - head.y;
+      const d2 = dx * dx + dy * dy;
+      if (d2 >= fr2) continue;
+      if (hasHeading) {
+        const alignment = dx * headingX + dy * headingY;
+        if (alignment <= 0) continue;
+      }
+      if (d2 < nearestThreatDistSq) {
+        nearestThreat = w;
+        nearestThreatDistSq = d2;
+      }
+    }
     if (nearestThreat) {
       let fleeX = head.x - nearestThreat.x;
       let fleeY = head.y - nearestThreat.y;
