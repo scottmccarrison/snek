@@ -6,14 +6,18 @@ import "./ui/mpModal.css";
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
-  width: 1280,
-  height: 720,
   parent: "game-container",
   backgroundColor: "#0b0b0f",
   scene: [BootScene, GameScene],
+  // Scale.RESIZE: canvas matches the parent (full window) size. No
+  // letterboxing on tall phones (iPhone 16 Pro landscape 2.17 ratio vs
+  // the old 1280x720 design ratio of 1.78 - the old FIT mode left
+  // black bars on the sides). HUD + Minimap listen for the RESIZE event
+  // and re-layout to the new viewport dims.
   scale: {
-    mode: Phaser.Scale.FIT,
-    autoCenter: Phaser.Scale.CENTER_BOTH,
+    mode: Phaser.Scale.RESIZE,
+    width: window.innerWidth,
+    height: window.innerHeight,
   },
   dom: {
     createContainer: true,

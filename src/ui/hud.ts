@@ -109,7 +109,11 @@ export class HUD {
   private lastRowColors: string[] = [];
   private lastMuted: boolean | null = null;
 
+  private scene: Phaser.Scene;
+  private resizeHandler: ((gameSize: Phaser.Structs.Size) => void) | null = null;
+
   constructor(scene: Phaser.Scene, mute: MuteController, playerId = "player") {
+    this.scene = scene;
     this.mute = mute;
     this.playerId = playerId;
 
@@ -164,6 +168,21 @@ export class HUD {
         this.drawMuteIcon();
       }
     });
+
+    // React to viewport changes (rotation, window resize). Refresh cached
+    // dims and force-redraw position-dependent UI (mute icon). Leaderboard
+    // rows + score text use the cached value each frame, so updating
+    // viewportW/H here is enough; render() picks up the new layout.
+    this.resizeHandler = (gameSize) => {
+      this.viewportW = gameSize.width;
+      this.viewportH = gameSize.height;
+      // Force-redraw mute icon at the new bottom-left position.
+      this.lastMuted = null;
+      this.drawMuteIcon();
+    };
+    // Use the event name string literal directly so the value-side of Phaser
+    // doesn't need to be imported (which would break unit tests in node env).
+    scene.scale.on("resize", this.resizeHandler);
   }
 
   private drawMuteIcon(): void {
@@ -275,6 +294,10 @@ export class HUD {
   }
 
   destroy(): void {
+    if (this.resizeHandler) {
+      this.scene.scale.off("resize", this.resizeHandler);
+      this.resizeHandler = null;
+    }
     this.graphics.destroy();
     this.scoreText.destroy();
     for (const t of this.leaderboardTexts) t.destroy();
