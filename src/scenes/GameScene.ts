@@ -7,6 +7,8 @@ import { World } from "../sim/world";
 import { Snake } from "../snake/snake";
 import { SnakeView } from "../snake/snakeView";
 import { tuning } from "../tuning";
+import { DeathScreen } from "../ui/deathScreen";
+import { HUD, type MuteController } from "../ui/hud";
 import { JoystickIndicator } from "../ui/joystickIndicator";
 import { Minimap } from "../ui/minimap";
 
@@ -19,7 +21,9 @@ export class GameScene extends Phaser.Scene {
   private foodHash!: SpatialHash<FoodItem>;
   private foodSpawner!: FoodSpawner;
   private minimap!: Minimap;
-  private restartPrompt: Phaser.GameObjects.Text | null = null;
+  private hud!: HUD;
+  private deathScreen!: DeathScreen;
+  private mutePlaceholder!: MuteController & { _muted: boolean };
   private waitingForRestart = false;
   private worldChromeCreated = false;
 
@@ -112,10 +116,33 @@ export class GameScene extends Phaser.Scene {
     // Construct minimap first so the steering callback can reference it.
     this.minimap = new Minimap(this);
 
+    // Mute placeholder - no-op until PR 1 (SoundManager) lands.
+    // PR 1 + PR 2 integration replaces this with the real SoundManager.
+    this.mutePlaceholder = {
+      _muted: false,
+      isMuted() {
+        return this._muted;
+      },
+      toggleMute() {
+        this._muted = !this._muted;
+        return this._muted;
+      },
+    };
+
+    // HUD above minimap (depth 2100). Takes a MuteController interface so
+    // the real SoundManager from PR 1 can drop in when branches merge.
+    this.hud = new HUD(this, this.mutePlaceholder);
+
+    // DeathScreen replaces the old Phaser restartPrompt.
+    this.deathScreen = new DeathScreen(() => this.restart());
+
     this.joystick = new JoystickIndicator(this);
+    // Extend steering's shouldIgnore to OR-combine minimap + mute button so
+    // tapping mute does not also anchor the joystick.
     this.steering = new PointerSteering(
       this,
-      (screenX, screenY) => this.minimap.hitsMinimap(screenX, screenY),
+      (screenX, screenY) =>
+        this.minimap.hitsMinimap(screenX, screenY) || this.hud.hitsMuteButton(screenX, screenY),
       {
         onTouchStart: (sx, sy) => this.joystick.show(sx, sy),
         onTouchMove: (sx, sy) => this.joystick.updateStick(sx, sy),
@@ -141,10 +168,6 @@ export class GameScene extends Phaser.Scene {
     // changes on reset.
     this.cameras.main.startFollow(player.segments[0], true, tuning.camera.lerp, tuning.camera.lerp);
 
-    if (this.restartPrompt) {
-      this.restartPrompt.destroy();
-      this.restartPrompt = null;
-    }
     this.waitingForRestart = false;
   }
 
@@ -183,6 +206,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.minimap.render(head.x, head.y, this.world);
+    this.hud.render(player, this.world);
   }
 
   private onSnakeDiedHandler(snakeId: string, _killedBy: string | null): void {
@@ -205,33 +229,31 @@ export class GameScene extends Phaser.Scene {
     player.die();
     const view = this.snakeViews.get("player");
     if (view) await view.playDeathAnimation();
-    this.showRestartPrompt();
-  }
 
-  private showRestartPrompt(): void {
     this.waitingForRestart = true;
-    const cam = this.cameras.main;
-    // Place prompt in viewport screen-space (independent of world scroll).
-    this.restartPrompt = this.add
-      .text(cam.width / 2, cam.height / 2, "tap to play again", {
-        fontFamily: "system-ui, sans-serif",
-        fontSize: "32px",
-        color: "#ffffff",
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(2500);
+    const stats = {
+      length: player.segments.length,
+      score: Math.max(0, player.segments.length - tuning.snake.initialLength),
+      killedBy: player.killedBy,
+    };
+    this.deathScreen.show(stats);
+
+    // Space-key respawn handler (keyboard users).
     let consumed = false;
     const doRestart = () => {
       if (consumed) return;
       consumed = true;
+      this.deathScreen.hide();
       this.restart();
     };
-    this.input.once("pointerdown", doRestart);
     this.input.keyboard?.once("keydown-SPACE", doRestart);
   }
 
   private restart(): void {
+    // Hide death screen before teardown so a rapid double-death can't stack overlays.
+    this.deathScreen.hide();
+    this.hud.destroy();
+
     for (const view of this.snakeViews.values()) {
       view.destroy();
     }
