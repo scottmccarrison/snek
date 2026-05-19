@@ -22,13 +22,14 @@ Browser-based snake.io / slither.io clone. Open a link, drag your finger, eat do
 
 ## Status
 
-**Phase 3 - Bot snakes** (done). **Phase 4 - Polish + feel** (next). See [docs/ROADMAP.md](docs/ROADMAP.md) for the 7-phase roadmap.
+**Phase 4 - Polish + feel** (done). **Phase 5 - MP foundation** (next, awaiting greenlight after Scott plays the MVP). See [docs/ROADMAP.md](docs/ROADMAP.md) for the 7-phase roadmap.
 
 - [x] Phase 0 - Scaffolding (0.1 + 0.2 + 0.3 + 0.4)
 - [x] Phase 1 - Solo snake (1.1 + 1.2 + 1.3 + 1.4 + 1.5 + 1.6) - shipped 2026-05-18
 - [x] Phase 2 - World + camera + minimap (2.1 + 2.2 + 2.3 + 2.4 + 2.5) - shipped 2026-05-18
 - [x] Phase 3 - Bot snakes (3.1 + 3.2 + 3.3 + 3.4 + 3.5 + 3.6) - shipped 2026-05-18
-- [ ] Phase 4 - Polish + feel
+- [x] Phase 4 - Polish + feel (boost, HUD, death screen, audio, touch) - shipped 2026-05-19
+- [ ] Phase 5 - MP foundation
 
 ## Stack
 
