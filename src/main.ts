@@ -1,6 +1,7 @@
 import * as Phaser from "phaser";
 import { BootScene } from "./scenes/BootScene";
 import { GameScene } from "./scenes/GameScene";
+import "./ui/deathScreen.css";
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,

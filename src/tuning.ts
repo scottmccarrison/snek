@@ -99,6 +99,14 @@ export interface Tuning {
     color: number;
     alpha: number;
   };
+  hud: {
+    safeInsetPx: number;
+    leaderboardCount: number;
+    textColor: number;
+    playerHighlightColor: number;
+    muteButtonSizePx: number;
+    alwaysShowPlayerRow: boolean;
+  };
 }
 
 export const tuning: Tuning = {
@@ -219,5 +227,13 @@ export const tuning: Tuning = {
     minDragPx: 8,
     color: 0xffffff,
     alpha: 0.4,
+  },
+  hud: {
+    safeInsetPx: 24,
+    leaderboardCount: 5,
+    textColor: 0xffffff,
+    playerHighlightColor: 0xffeb3b,
+    muteButtonSizePx: 44,
+    alwaysShowPlayerRow: true,
   },
 };
