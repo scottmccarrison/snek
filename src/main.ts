@@ -17,6 +17,12 @@ const config: Phaser.Types.Core.GameConfig = {
   dom: {
     createContainer: true,
   },
+  // Phaser's default activePointers is 1 - the second touch needed for
+  // boost would be silently dropped. 3 = primary steering thumb + boost
+  // finger + one slack pointer (palm contact / accidental touches).
+  input: {
+    activePointers: 3,
+  },
 };
 
 const game = new Phaser.Game(config);
