@@ -54,6 +54,28 @@ describe("Snake", () => {
     expect(snake.checkSelfCollision()).toBe(false);
   });
 
+  it("scale follows the sqrt growth curve and caps at maxBodyScale", () => {
+    // Verify the formula 1 + sqrt(excess / scaleDivisor) capped at maxBodyScale.
+    const fresh = new Snake(100, 100);
+    expect(fresh.scale).toBe(1);
+
+    // length 320 = initial 20 + 300 excess. sqrt(300/300) = 1. scale = 2.
+    const mid = new Snake(100, 100);
+    while (mid.segments.length < 320) {
+      mid.grow(1);
+      mid.update(1 / 60, 1, 0);
+    }
+    expect(mid.scale).toBeCloseTo(2.0, 1);
+
+    // Cap: huge growth should not exceed maxBodyScale.
+    const giant = new Snake(100, 100);
+    while (giant.segments.length < 10000) {
+      giant.grow(50);
+      giant.update(1 / 60, 1, 0);
+    }
+    expect(giant.scale).toBe(tuning.snake.maxBodyScale);
+  });
+
   it("checkSelfCollision returns true when head wraps into body", () => {
     const snake = new Snake(100, 100);
     // The dynamic skip is roughly selfCollisionSkip + segmentsPerTurn (~13)
@@ -112,8 +134,9 @@ describe("Snake", () => {
     // (multiple full rotations) is intentionally NOT tested - that geometry
     // IS a real self-bite and can't be distinguished from one.
     const snake = new Snake(2000, 2000);
-    snake.grow(80);
-    for (let i = 0; i < 200; i++) {
+    // Grow to ~length 320 (scale 2 under the sqrt formula).
+    snake.grow(300);
+    for (let i = 0; i < 600; i++) {
       snake.update(1 / 60, 1, 0);
     }
     expect(snake.scale).toBeGreaterThanOrEqual(2);

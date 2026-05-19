@@ -183,6 +183,32 @@ export class BotBrain {
         }
       }
     }
+    // Self-body avoidance: treat the bot's own segments past the curve-skip
+    // count as threats too. Without this, a long bot turning sharply curves
+    // into itself and dies (its own body is invisible to the avoid scan).
+    // Skip math mirrors Snake.checkSelfCollision: skip a full turning-circle
+    // worth of segments past the base skip so normal turning doesn't trigger.
+    // Only runs once heading is known; on the spawn frame the body is right
+    // behind the head and would always be "in range" without a hemisphere
+    // filter, falsely triggering flee.
+    if (hasHeading) {
+      const turnRadius = tuning.snake.speedPxPerSec / tuning.snake.turnRateRadPerSec;
+      const segmentsPerTurn = Math.ceil((2 * Math.PI * turnRadius) / tuning.snake.spacingPx);
+      const selfSkip = tuning.snake.selfCollisionSkip + segmentsPerTurn;
+      for (let i = selfSkip; i < snake.segments.length; i++) {
+        const s = snake.segments[i];
+        const dx = s.x - head.x;
+        const dy = s.y - head.y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 >= fr2) continue;
+        const alignment = dx * headingX + dy * headingY;
+        if (alignment <= 0) continue;
+        if (d2 < nearestThreatDistSq) {
+          nearestThreat = s;
+          nearestThreatDistSq = d2;
+        }
+      }
+    }
     if (nearestThreat) {
       let fleeX = head.x - nearestThreat.x;
       let fleeY = head.y - nearestThreat.y;
