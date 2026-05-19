@@ -34,6 +34,11 @@ export class Snake {
   killedBy: string | null = null;
   pendingDirX = 0;
   pendingDirY = 0;
+  // Boost state - set externally by GameScene (player) or bot AI.
+  // Bots never set this in Phase 4.
+  boostActive = false;
+  private boostShedAccumulator = 0;
+  private shedPositions: { x: number; y: number }[] = [];
 
   private headPath: { x: number; y: number }[];
 
@@ -81,6 +86,9 @@ export class Snake {
     this.growth = 0;
     this.pendingDirX = 0;
     this.pendingDirY = 0;
+    this.boostActive = false;
+    this.boostShedAccumulator = 0;
+    this.shedPositions = [];
     this.segments.length = 0;
     for (let i = 0; i < length; i++) {
       this.segments.push({ x: startX - i * tuning.snake.spacingPx, y: startY });
@@ -106,9 +114,16 @@ export class Snake {
       dy = ddy / len;
     }
 
+    // Speed multiplier: boost is active only if snake exceeds the minimum
+    // length threshold. Clamped off automatically when length drops to min.
+    const speedMul =
+      this.boostActive && this.segments.length > tuning.snake.boostMinLength
+        ? tuning.snake.boostSpeedMultiplier
+        : 1;
+
     const newHead = {
-      x: this.segments[0].x + dx * tuning.snake.speedPxPerSec * dt,
-      y: this.segments[0].y + dy * tuning.snake.speedPxPerSec * dt,
+      x: this.segments[0].x + dx * tuning.snake.speedPxPerSec * speedMul * dt,
+      y: this.segments[0].y + dy * tuning.snake.speedPxPerSec * speedMul * dt,
     };
     this.headPath.unshift(newHead);
 
@@ -151,10 +166,12 @@ export class Snake {
     // Trim deque: keep enough history to cover full length + safety buffer.
     // Be generous - prefer keeping too many entries to too few. At dt=1/60
     // and speed=180, body needs ~22 entries; cap at 256 to bound memory.
+    // speedMul is applied here too so the ring buffer stays proportional
+    // during boost (otherwise the body chain snaps at high speed).
     const minEntriesNeeded =
       Math.ceil(
         (this.segments.length * tuning.snake.spacingPx) /
-          Math.max(1e-3, tuning.snake.speedPxPerSec * dt),
+          Math.max(1e-3, tuning.snake.speedPxPerSec * speedMul * dt),
       ) + 8;
     const cap = 256;
     const keep = Math.min(cap, Math.max(minEntriesNeeded, this.segments.length + 4));
@@ -166,6 +183,35 @@ export class Snake {
       this.segments.push({ x: last.x, y: last.y });
       this.growth--;
     }
+
+    // Boost drain: shed tail segments as pellets when boosting.
+    // Only runs when the effective speedMul > 1 (checked via the same
+    // boostActive + length guard, not via speedMul variable which is
+    // already out of scope here).
+    if (this.boostActive && this.segments.length > tuning.snake.boostMinLength) {
+      this.boostShedAccumulator += tuning.snake.boostDrainPerSec * dt;
+      while (this.boostShedAccumulator >= 1 && this.segments.length > tuning.snake.boostMinLength) {
+        const tail = this.segments.pop();
+        if (tail) this.shedPositions.push({ x: tail.x, y: tail.y });
+        this.boostShedAccumulator -= 1;
+      }
+      // Force boost off if we hit the minimum length floor.
+      if (this.segments.length <= tuning.snake.boostMinLength) {
+        this.boostActive = false;
+        this.boostShedAccumulator = 0;
+      }
+    }
+  }
+
+  /**
+   * Returns and clears the list of positions where segments were shed
+   * this frame during boost. GameScene calls this for the player only to
+   * spawn pellets at those positions.
+   */
+  consumeShedPositions(): { x: number; y: number }[] {
+    const result = this.shedPositions;
+    this.shedPositions = [];
+    return result;
   }
 
   grow(n: number): void {

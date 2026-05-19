@@ -1,5 +1,6 @@
 import * as Phaser from "phaser";
 import { SpatialHash } from "../../shared/spatialHash";
+import { SoundManager } from "../audio/sound";
 import { type FoodItem, FoodSpawner } from "../food/foodSpawner";
 import { PointerSteering } from "../input/pointer";
 import { BotManager } from "../sim/botManager";
@@ -19,6 +20,9 @@ export class GameScene extends Phaser.Scene {
   private foodHash!: SpatialHash<FoodItem>;
   private foodSpawner!: FoodSpawner;
   private minimap!: Minimap;
+  private soundManager!: SoundManager;
+  // Guard so we only call soundManager.unlock() once per game session.
+  private audioUnlocked = false;
   private restartPrompt: Phaser.GameObjects.Text | null = null;
   private waitingForRestart = false;
   private worldChromeCreated = false;
@@ -90,6 +94,10 @@ export class GameScene extends Phaser.Scene {
     const cx = tuning.world.widthPx / 2;
     const cy = tuning.world.heightPx / 2;
 
+    // SoundManager first - constructed before anything that might reference it.
+    this.soundManager = new SoundManager();
+    this.audioUnlocked = false;
+
     // Set up world with event handler.
     this.world = new World({
       onSnakeDied: (snakeId, killedBy) => this.onSnakeDiedHandler(snakeId, killedBy),
@@ -150,6 +158,13 @@ export class GameScene extends Phaser.Scene {
 
   update(_time: number, deltaMs: number): void {
     const dt = Math.min(deltaMs / 1000, 1 / 30);
+
+    // Unlock audio on first frame with any input (satisfies iOS gesture policy).
+    if (!this.audioUnlocked && this.input.activePointer.isDown) {
+      this.soundManager.unlock();
+      this.audioUnlocked = true;
+    }
+
     if (this.waitingForRestart) return;
 
     const player = this.world.snakes.get("player");
@@ -160,15 +175,31 @@ export class GameScene extends Phaser.Scene {
     player.pendingDirX = dirX;
     player.pendingDirY = dirY;
 
+    // Boost: read second-touch or Space from steering, apply to player only.
+    // Bots do NOT boost in Phase 4.
+    player.boostActive = this.steering.getBoostHeld();
+    this.soundManager.setBoosting(player.boostActive);
+
     this.botManager.update(dt, head.x, head.y);
     this.world.update(dt);
+
+    // Consume shed positions from boost and spawn them as pellets.
+    // Player only - bots never shed via boost in Phase 4.
+    const shed = player.consumeShedPositions();
+    if (shed.length > 0) {
+      this.foodSpawner.spawnPelletsAt(shed);
+    }
 
     // Every living snake gets a chance to eat food (not just the player).
     // Without this, bots stop on top of pellets without consuming them and
     // oscillate around them via the seek_food FSM state.
     for (const snake of this.world.snakes.values()) {
       if (snake.dead) continue;
-      this.foodSpawner.checkEat(snake);
+      const eaten = this.foodSpawner.checkEat(snake);
+      // Eat sound fires only for the player to avoid bot-eat spam.
+      if (snake.id === "player" && eaten > 0) {
+        this.soundManager.playEat();
+      }
     }
     this.foodSpawner.update(this.world);
 
@@ -203,6 +234,10 @@ export class GameScene extends Phaser.Scene {
     const player = this.world.snakes.get("player");
     if (!player) return;
     player.die();
+    // Stop boost loop and play death sound. Order matters: stop boost first
+    // so the oscillator doesn't overlap the die sound.
+    this.soundManager.setBoosting(false);
+    this.soundManager.playDie();
     const view = this.snakeViews.get("player");
     if (view) await view.playDeathAnimation();
     this.showRestartPrompt();

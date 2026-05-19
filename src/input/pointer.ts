@@ -40,13 +40,20 @@ export class PointerSteering {
   // the first touchdown until that pointer lifts. Prevents accidental
   // multi-touch from stealing the anchor or releasing it early.
   private activeTouchId: number | null = null;
+  // Total number of currently-held touches. Includes the primary steering
+  // touch plus any secondary touches. Used to detect the "second finger
+  // held" boost gesture.
+  private touchCount = 0;
   private currentDirX = 0;
   private currentDirY = 0;
   private hasInput = false;
   private arrows: Phaser.Types.Input.Keyboard.CursorKeys | null = null;
+  private spaceKey: Phaser.Input.Keyboard.Key | null = null;
   private pointerDownHandler: (p: Phaser.Input.Pointer) => void;
   private pointerMoveHandler: (p: Phaser.Input.Pointer) => void;
   private pointerUpHandler: (p: Phaser.Input.Pointer) => void;
+  private pointerCancelHandler: (p: Phaser.Input.Pointer) => void;
+  private visibilityChangeHandler: () => void;
   private opts: PointerSteeringOpts;
 
   constructor(
@@ -58,10 +65,17 @@ export class PointerSteering {
     this.pointerDownHandler = (p) => this.onPointerDown(p);
     this.pointerMoveHandler = (p) => this.onPointerMove(p);
     this.pointerUpHandler = (p) => this.onPointerUp(p);
+    this.pointerCancelHandler = (p) => this.onPointerCancel(p);
+    this.visibilityChangeHandler = () => this.onVisibilityChange();
     scene.input.on("pointerdown", this.pointerDownHandler);
     scene.input.on("pointermove", this.pointerMoveHandler);
     scene.input.on("pointerup", this.pointerUpHandler);
+    scene.input.on("pointercancel", this.pointerCancelHandler);
+    document.addEventListener("visibilitychange", this.visibilityChangeHandler);
     this.arrows = scene.input.keyboard?.createCursorKeys() ?? null;
+    // Explicit Space key binding - do not rely on CursorKeys.space which
+    // varies across Phaser versions.
+    this.spaceKey = scene.input.keyboard?.addKey("SPACE") ?? null;
   }
 
   private onPointerDown(p: Phaser.Input.Pointer): void {
@@ -71,8 +85,11 @@ export class PointerSteering {
       this.mouseLastWorldY = p.worldY;
       this.hasMousePointer = true;
     } else {
-      // Only honor the FIRST touch. Secondary touches are ignored until
-      // the active one lifts.
+      // Increment touchCount BEFORE the early-return guard so secondary
+      // touches are always counted even when the primary joystick is active.
+      this.touchCount++;
+      // Only honor the FIRST touch for joystick steering. Secondary touches
+      // are counted (for boost detection) but ignored for direction.
       if (this.activeTouchId !== null) return;
       this.activeTouchId = p.id;
       this.touchAnchorX = p.x;
@@ -102,12 +119,46 @@ export class PointerSteering {
 
   private onPointerUp(p: Phaser.Input.Pointer): void {
     if (!p.wasTouch) return;
+    // Decrement touchCount BEFORE the early-return guard so secondary
+    // touches are always counted down, not just the primary.
+    this.touchCount = Math.max(0, this.touchCount - 1);
     // Only the ACTIVE touch lifting releases the joystick. Lifting a
     // secondary finger does not stop steering with the primary thumb.
     if (p.id !== this.activeTouchId) return;
     this.activeTouchId = null;
     this.touchDragging = false;
     this.opts.onTouchEnd?.();
+  }
+
+  private onPointerCancel(p: Phaser.Input.Pointer): void {
+    // pointercancel fires on iOS Safari when focus is stolen (address bar,
+    // share sheet, context menu). Mirror pointerup: decrement count and
+    // release the active touch if this was the primary pointer.
+    if (!p.wasTouch) return;
+    this.touchCount = Math.max(0, this.touchCount - 1);
+    if (p.id !== this.activeTouchId) return;
+    this.activeTouchId = null;
+    this.touchDragging = false;
+    this.opts.onTouchEnd?.();
+  }
+
+  private onVisibilityChange(): void {
+    // Page hidden (user switched apps, locked screen, etc.) - release all
+    // touch state so the snake doesn't fly off when the user returns.
+    if (typeof document !== "undefined" && document.hidden) {
+      this.touchCount = 0;
+      this.activeTouchId = null;
+      this.touchDragging = false;
+      this.opts.onTouchEnd?.();
+    }
+  }
+
+  /**
+   * Returns true when boost should be active: second touch held OR Space bar.
+   * Does NOT return true for only one touch (the joystick touch itself).
+   */
+  getBoostHeld(): boolean {
+    return this.touchCount > 1 || !!this.spaceKey?.isDown;
   }
 
   private readArrows(): { x: number; y: number } | null {
@@ -179,5 +230,7 @@ export class PointerSteering {
     this.scene.input.off("pointerdown", this.pointerDownHandler);
     this.scene.input.off("pointermove", this.pointerMoveHandler);
     this.scene.input.off("pointerup", this.pointerUpHandler);
+    this.scene.input.off("pointercancel", this.pointerCancelHandler);
+    document.removeEventListener("visibilitychange", this.visibilityChangeHandler);
   }
 }
