@@ -88,12 +88,23 @@ export class Snake {
     this.pendingDirY = 0;
     this.boostActive = false;
     this.boostShedAccumulator = 0;
-    this.shedPositions = [];
-    this.segments.length = 0;
+    this.shedPositions.length = 0;
+    // Mutate existing slots in place so segments[0] keeps its object identity.
+    // This matters for Phaser camera follow targets that hold the reference.
+    while (this.segments.length > length) this.segments.pop();
     for (let i = 0; i < length; i++) {
-      this.segments.push({ x: startX - i * tuning.snake.spacingPx, y: startY });
+      const x = startX - i * tuning.snake.spacingPx;
+      const y = startY;
+      if (i < this.segments.length) {
+        this.segments[i].x = x;
+        this.segments[i].y = y;
+      } else {
+        this.segments.push({ x, y });
+      }
     }
-    this.headPath = this.segments.map((s) => ({ x: s.x, y: s.y }));
+    // Reset the headPath ring buffer to match new positions.
+    this.headPath.length = 0;
+    for (const s of this.segments) this.headPath.push({ x: s.x, y: s.y });
   }
 
   update(dt: number, dirX?: number, dirY?: number): void {

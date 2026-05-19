@@ -9,11 +9,10 @@ import { World } from "../sim/world";
 import { Snake } from "../snake/snake";
 import { type RenderableSnake, SnakeView } from "../snake/snakeView";
 import { tuning } from "../tuning";
-import { DeathScreen } from "../ui/deathScreen";
 import { HUD } from "../ui/hud";
 import { JoystickIndicator } from "../ui/joystickIndicator";
+import { type GameoverStats, MainMenu } from "../ui/mainMenu";
 import { Minimap } from "../ui/minimap";
-import { StartMenu } from "../ui/startMenu";
 
 export class GameScene extends Phaser.Scene {
   private world!: World;
@@ -27,9 +26,7 @@ export class GameScene extends Phaser.Scene {
   // Guard so we only call soundManager.unlock() once per game session.
   private audioUnlocked = false;
   private hud!: HUD;
-  private deathScreen!: DeathScreen;
-  private startMenu!: StartMenu;
-  private waitingForStart = true;
+  private mainMenu: MainMenu | null = null;
   private waitingForRestart = false;
   private worldChromeCreated = false;
 
@@ -88,13 +85,6 @@ export class GameScene extends Phaser.Scene {
       this.startMpGame();
     } else {
       this.startGame();
-      // StartMenu is constructed once per scene lifetime and is NOT touched
-      // by restart() - 'tap to play again' on death goes straight into a new
-      // game without re-prompting at the menu.
-      this.startMenu = new StartMenu(() => {
-        this.waitingForStart = false;
-      });
-      this.startMenu.show();
     }
   }
 
@@ -186,9 +176,6 @@ export class GameScene extends Phaser.Scene {
     // the MuteController interface that HUD's mute button needs.
     this.hud = new HUD(this, this.soundManager);
 
-    // DeathScreen replaces the old Phaser restartPrompt.
-    this.deathScreen = new DeathScreen(() => this.restart());
-
     this.joystick = new JoystickIndicator(this);
     // Extend steering's shouldIgnore to OR-combine minimap + mute button so
     // tapping mute does not also anchor the joystick.
@@ -215,9 +202,8 @@ export class GameScene extends Phaser.Scene {
 
     // Camera follows the snake head. Phaser.Camera.startFollow's signature
     // accepts `GameObject | object` and reads `.x`/`.y` each frame, so the
-    // plain segments[0] works directly with no cast. Re-call after every
-    // Snake construction OR Snake.reset() - segments[0] object identity
-    // changes on reset.
+    // plain segments[0] works directly with no cast. segments[0] object
+    // identity is preserved across reset() by the resetWithLength refactor.
     this.cameras.main.startFollow(player.segments[0], true, tuning.camera.lerp, tuning.camera.lerp);
 
     this.waitingForRestart = false;
@@ -231,12 +217,6 @@ export class GameScene extends Phaser.Scene {
 
     this.minimap = new Minimap(this);
     this.hud = new HUD(this, this.soundManager);
-
-    // MP death screen: tap-to-play-again sends respawn to server instead
-    // of rebuilding the local world.
-    this.deathScreen = new DeathScreen(() => {
-      this.room?.send({ type: "respawn" });
-    });
 
     this.joystick = new JoystickIndicator(this);
     this.steering = new PointerSteering(
@@ -269,7 +249,7 @@ export class GameScene extends Phaser.Scene {
       }),
     );
 
-    // Subscribe to death events - show death screen for the player's snake.
+    // Subscribe to death events - show main menu (gameover-mp) for the player's snake.
     this.mpUnsubs.push(
       this.room.onMessage("snake_died", (msg) => {
         if (msg.snakeId === snakeId && !this.mpDeathShown) {
@@ -279,12 +259,12 @@ export class GameScene extends Phaser.Scene {
       }),
     );
 
-    // Subscribe to respawn events - hide death screen when player respawns.
+    // Subscribe to respawn events - hide menu when player respawns.
     this.mpUnsubs.push(
       this.room.onMessage("snake_respawned", (msg) => {
         if (msg.snakeId === snakeId && this.mpDeathShown) {
           this.mpDeathShown = false;
-          this.deathScreen.hide();
+          this.mainMenu?.hide();
         }
       }),
     );
@@ -303,7 +283,6 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.setBounds(0, 0, worldDims.w, worldDims.h);
     this.cameras.main.setScroll(worldDims.w / 2 - 640, worldDims.h / 2 - 360);
 
-    this.waitingForStart = false;
     this.waitingForRestart = false;
   }
 
@@ -321,8 +300,8 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // Solo mode - unchanged from prior implementation.
-    if (this.waitingForStart || this.waitingForRestart) return;
+    // Solo mode.
+    if (this.waitingForRestart) return;
 
     const player = this.world.snakes.get("player");
     if (!player || player.dead) return;
@@ -502,7 +481,25 @@ export class GameScene extends Phaser.Scene {
     // does not exist in MP - snapshots are the only source of truth).
     const length = this.lastPlayerSegmentCount;
     const score = Math.max(0, length - tuning.snake.initialLength);
-    this.deathScreen.show({ length, score, killedBy });
+    const stats: GameoverStats = { score, killedBy };
+
+    // Destroy any prior menu (shouldn't exist, but guard for safety).
+    this.mainMenu?.destroy();
+    this.mainMenu = new MainMenu({
+      onStart: () => {
+        /* no-op in gameover */
+      },
+      onMultiplayer: () => {
+        /* no-op in gameover */
+      },
+      onRestart: () => {
+        this.room?.send({ type: "respawn" });
+      },
+      onLeave: () => {
+        this.handleLeave();
+      },
+    });
+    this.mainMenu.show("gameover-mp", stats);
 
     // Space-key respawn handler for keyboard users.
     let consumed = false;
@@ -540,38 +537,84 @@ export class GameScene extends Phaser.Scene {
     if (view) await view.playDeathAnimation();
 
     this.waitingForRestart = true;
-    const stats = {
-      length: player.segments.length,
+    const stats: GameoverStats = {
       score: Math.max(0, player.segments.length - tuning.snake.initialLength),
       killedBy: player.killedBy,
     };
-    this.deathScreen.show(stats);
+
+    // Destroy any prior menu (guard against rapid double-death).
+    this.mainMenu?.destroy();
+    this.mainMenu = new MainMenu({
+      onStart: () => {
+        /* no-op in gameover */
+      },
+      onMultiplayer: () => {
+        /* no-op in gameover */
+      },
+      onRestart: () => {
+        this.respawnPlayerInPlace();
+      },
+      onLeave: () => {
+        this.handleLeave();
+      },
+    });
+    this.mainMenu.show("gameover-solo", stats);
 
     // Space-key respawn handler (keyboard users).
     let consumed = false;
     const doRestart = () => {
       if (consumed) return;
       consumed = true;
-      this.deathScreen.hide();
-      this.restart();
+      this.respawnPlayerInPlace();
     };
     this.input.keyboard?.once("keydown-SPACE", doRestart);
   }
 
-  private restart(): void {
-    // Hide death screen before teardown so a rapid double-death can't stack overlays.
-    this.deathScreen.hide();
-    this.hud.destroy();
+  private respawnPlayerInPlace(): void {
+    const player = this.world.snakes.get("player");
+    if (!player) return;
+    // Hide the gameover menu (it'll show again on next death).
+    this.mainMenu?.hide();
+    // Pick a safe spawn point (away from other snakes' bodies).
+    const { x, y } = this.pickSafeSpawnPoint();
+    player.reset(x, y);
+    // Hard-cut camera, then resume follow with the existing lerp.
+    this.cameras.main.stopFollow();
+    this.cameras.main.centerOn(x, y);
+    this.cameras.main.startFollow(player.segments[0], true, tuning.camera.lerp, tuning.camera.lerp);
+    this.waitingForRestart = false;
+  }
 
-    for (const view of this.snakeViews.values()) {
-      view.destroy();
+  private pickSafeSpawnPoint(): { x: number; y: number } {
+    const clearance = tuning.snake.headRadiusPx * 8;
+    const c2 = clearance * clearance;
+    for (let attempts = 0; attempts < 16; attempts++) {
+      const x = 200 + Math.random() * (tuning.world.widthPx - 400);
+      const y = 200 + Math.random() * (tuning.world.heightPx - 400);
+      let safe = true;
+      for (const other of this.world.snakes.values()) {
+        if (other.dead || other.id === "player") continue;
+        for (const s of other.segments) {
+          const dx = s.x - x;
+          const dy = s.y - y;
+          if (dx * dx + dy * dy < c2) {
+            safe = false;
+            break;
+          }
+        }
+        if (!safe) break;
+      }
+      if (safe) return { x, y };
     }
-    this.snakeViews.clear();
-    this.steering.destroy();
-    this.joystick.destroy();
-    this.foodSpawner.destroy();
-    this.minimap.destroy();
-    this.botManager.destroy();
-    this.startGame();
+    return { x: tuning.world.widthPx / 2, y: tuning.world.heightPx / 2 };
+  }
+
+  private handleLeave(): void {
+    this.mainMenu?.destroy();
+    this.mainMenu = null;
+    if (this.mode === "mp" && this.room) {
+      this.room.leave();
+    }
+    this.scene.start("BootScene");
   }
 }
