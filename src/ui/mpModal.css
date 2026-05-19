@@ -95,3 +95,69 @@
   color: #ffb347;
   min-height: 14px;
 }
+.snek-mp-lobby {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.snek-mp-lobby-title {
+  font-size: 13px;
+  color: #aaa;
+  letter-spacing: 1px;
+}
+.snek-mp-lobby-code {
+  color: #4caf50;
+  font-weight: bold;
+  letter-spacing: 4px;
+  font-size: 18px;
+}
+.snek-mp-roster {
+  list-style: none;
+  padding: 6px 10px;
+  margin: 0;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.snek-mp-host-tag {
+  display: inline-block;
+  background: #ffb347;
+  color: #222;
+  font-size: 9px;
+  font-weight: bold;
+  padding: 1px 4px;
+  border-radius: 3px;
+  letter-spacing: 1px;
+  margin-right: 4px;
+}
+.snek-mp-roster-name {
+  font-weight: bold;
+}
+.snek-mp-ready-check {
+  color: #4caf50;
+  font-weight: bold;
+  font-size: 11px;
+  letter-spacing: 1px;
+}
+.snek-mp-ready-not {
+  color: #888;
+  font-size: 11px;
+  font-style: italic;
+}
+.snek-mp-ready {
+  background: #2196f3;
+  color: #fff;
+  border: 0;
+  border-radius: 6px;
+  padding: 10px 20px;
+  font-size: 15px;
+  font-weight: bold;
+  letter-spacing: 2px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.snek-mp-ready.ready-active {
+  background: #4caf50;
+}

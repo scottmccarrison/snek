@@ -269,6 +269,13 @@ export class GameScene extends Phaser.Scene {
       }),
     );
 
+    // Handle host-left: tear down and return to BootScene.
+    this.mpUnsubs.push(
+      this.room.onMessage("game_ended", () => {
+        this.scene.start("BootScene");
+      }),
+    );
+
     // Handle disconnect - log it and show a status overlay for Phase 5.
     // Full reconnect is Phase 6 polish.
     this.mpUnsubs.push(
