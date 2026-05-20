@@ -19,6 +19,7 @@ import { type SimEvent, SnakeSim } from "./sim/snakeSim";
 
 export interface Env {
   ROOMS: DurableObjectNamespace;
+  LEADERBOARD: DurableObjectNamespace;
   ASSETS: Fetcher;
   PATH_PREFIX?: string;
   DEBUG_LOG?: string;
@@ -360,6 +361,25 @@ export class Room {
         for (const e of events) {
           if (e.type === "snake_died") {
             this.respawnCooldown.set(e.snakeId, Date.now() + 2000);
+            // Cross-room leaderboard: submit final length for human snakes only.
+            // Snake id format: "p_<sessionId>" for humans, "bot<N>" for bots.
+            if (e.snakeId.startsWith("p_")) {
+              const sessionId = e.snakeId.slice(2);
+              const meta = this.playerMeta.get(sessionId);
+              const snake = this.sim?.world.snakes.get(e.snakeId);
+              if (meta?.nickname && snake) {
+                const stub = this.env.LEADERBOARD.get(
+                  this.env.LEADERBOARD.idFromName("global"),
+                ) as unknown as {
+                  submitScore(e: { nickname: string; length: number }): Promise<void>;
+                };
+                this.state.waitUntil(
+                  stub
+                    .submitScore({ nickname: meta.nickname, length: snake.segments.length })
+                    .catch((err: unknown) => console.warn(`[leaderboard] submit failed: ${err}`)),
+                );
+              }
+            }
           }
         }
         await this.broadcastState();

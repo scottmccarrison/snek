@@ -1,6 +1,7 @@
 import type { PlayerRosterEntry } from "../../shared/protocol";
 import { type NetClient, makeNetClient } from "../net/client";
 import type { RoomHandle } from "../net/wsClient";
+import { LeaderboardPanel } from "./leaderboardPanel";
 import { renderQrCanvas } from "./qrCode";
 
 export interface MpModalCallbacks {
@@ -19,6 +20,7 @@ export class MpModal {
   private myReady = false;
   private stateUnsub: (() => void) | null = null;
   private endedUnsub: (() => void) | null = null;
+  private leaderboardPanel: LeaderboardPanel | null = null;
 
   constructor(cbs: MpModalCallbacks) {
     this.cbs = cbs;
@@ -37,6 +39,7 @@ export class MpModal {
       </div>
       <button class="snek-mp-cancel">Cancel</button>
       <div class="snek-mp-status"></div>
+      <div class="snek-mp-leaderboard-slot"></div>
       <div class="snek-mp-lobby" style="display:none">
         <div class="snek-mp-lobby-code-and-qr">
           <div class="snek-mp-lobby-title">Room <span class="snek-mp-lobby-code"></span></div>
@@ -77,14 +80,26 @@ export class MpModal {
     this.myReady = false;
     this.setStatus("");
     this.el.style.display = "flex";
+    // Mount leaderboard panel into the slot if not already mounted.
+    if (!this.leaderboardPanel) {
+      const slot = this.el.querySelector<HTMLDivElement>(".snek-mp-leaderboard-slot");
+      if (slot) {
+        this.leaderboardPanel = new LeaderboardPanel(10);
+        this.leaderboardPanel.mount(slot);
+      }
+    }
   }
 
   hide(): void {
     this.el.style.display = "none";
+    this.leaderboardPanel?.destroy();
+    this.leaderboardPanel = null;
   }
 
   destroy(): void {
     this.tearDownLobbySubs();
+    this.leaderboardPanel?.destroy();
+    this.leaderboardPanel = null;
     this.hide();
     this.el.remove();
   }

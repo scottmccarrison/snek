@@ -13,6 +13,7 @@ import { checkRate } from "./rateLimit";
 import type { Env } from "./room";
 
 export { Room } from "./room";
+export { Leaderboard } from "./leaderboard";
 
 // Soft per-IP flood cap. 10-token burst, refill 0.5/s (one token every 2s).
 // Best-effort only - see rateLimit.ts for the threat-model caveat.
@@ -59,6 +60,22 @@ export default {
       if (!isValidCode(code)) return new Response("bad code", { status: 400 });
       const id = env.ROOMS.idFromName(code);
       return env.ROOMS.get(id).fetch(request);
+    }
+
+    // Leaderboard: GET /snek/api/leaderboard?n=10
+    if (url.pathname === `${prefix}/api/leaderboard` && request.method === "GET") {
+      if (!checkRate(ip, 30, 1)) {
+        console.warn(`[flood-cap] ip=${ip} path=${url.pathname}`);
+        return new Response("rate limited", { status: 429 });
+      }
+      const n = Math.max(1, Math.min(50, Number(url.searchParams.get("n")) || 10));
+      const stub = env.LEADERBOARD.get(env.LEADERBOARD.idFromName("global")) as unknown as {
+        getTopN(n: number): Promise<unknown[]>;
+      };
+      const scores = await stub.getTopN(n);
+      return new Response(JSON.stringify({ scores }), {
+        headers: { "content-type": "application/json", "cache-control": "no-store" },
+      });
     }
 
     // Strip the configured prefix so the asset bundle (keyed off
