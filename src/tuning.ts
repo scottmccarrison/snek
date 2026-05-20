@@ -11,6 +11,11 @@ export interface Tuning {
     nicknameMaxLen: number;
     interpolationDelayMs: number;
     snapshotBufferSize: number;
+    interpolationDelayMinMs: number;
+    interpolationDelayMaxMs: number;
+    jitterSampleWindow: number;
+    ownSnakeSmoothHalfLifeMs: number;
+    ownSnakeSmoothSnapThresholdPx: number;
   };
   snake: {
     speedPxPerSec: number;
@@ -146,6 +151,19 @@ export const tuning: Tuning = {
     interpolationDelayMs: 75,
     // Snapshots to keep in the client buffer. Covers interpDelay + margin.
     snapshotBufferSize: 8,
+    // Phase 6.2 adaptive interp: per-user delay = clamp(min, max, expectedGap + p95 jitter).
+    // Static interpolationDelayMs above is the fallback before the monitor warms up.
+    interpolationDelayMinMs: 50, // one server tick
+    interpolationDelayMaxMs: 200, // ceiling for very flaky connections
+    jitterSampleWindow: 30, // ~1.5s of arrivals at 20Hz
+    // Own-snake smoothing half-life. Lerp the local snake's rendered segments
+    // toward the latest server snapshot every frame so the 20Hz step doesn't
+    // show as choppy. 60ms keeps alpha around 0.32 at the dt-clamp (33ms).
+    ownSnakeSmoothHalfLifeMs: 60,
+    // Snap-reset the smoothed snake if the target head jumps more than this
+    // in one snapshot. Catches respawn / teleport so we don't lerp across
+    // the world.
+    ownSnakeSmoothSnapThresholdPx: 100,
   },
   snake: {
     speedPxPerSec: 180,
