@@ -12,6 +12,7 @@ import { type RenderableSnake, SnakeView } from "../snake/snakeView";
 import { tuning } from "../tuning";
 import { HUD } from "../ui/hud";
 import { JoystickIndicator } from "../ui/joystickIndicator";
+import { Killfeed } from "../ui/killfeed";
 import { type GameoverStats, MainMenu } from "../ui/mainMenu";
 import { Minimap } from "../ui/minimap";
 
@@ -75,6 +76,7 @@ export class GameScene extends Phaser.Scene {
   // server's roster so the leaderboard labels stay current as players
   // join / leave / change names.
   private mpNicknames = new Map<string, string>();
+  private killfeed: Killfeed | null = null;
 
   constructor() {
     super({ key: "GameScene" });
@@ -113,6 +115,10 @@ export class GameScene extends Phaser.Scene {
     if (this.mpFoodGraphics) {
       this.mpFoodGraphics.destroy();
       this.mpFoodGraphics = null;
+    }
+    if (this.killfeed) {
+      this.killfeed.destroy();
+      this.killfeed = null;
     }
   }
 
@@ -254,6 +260,7 @@ export class GameScene extends Phaser.Scene {
 
     this.minimap = new Minimap(this);
     this.hud = new HUD(this, this.soundManager);
+    this.killfeed = new Killfeed(this);
 
     this.joystick = new JoystickIndicator(this);
     this.steering = new PointerSteering(
@@ -311,6 +318,12 @@ export class GameScene extends Phaser.Scene {
     // Subscribe to death events - show main menu (gameover-mp) for the player's snake.
     this.mpUnsubs.push(
       this.room.onMessage("snake_died", (msg) => {
+        const victimLabel = this.mpNicknames.get(msg.snakeId) ?? msg.snakeId.slice(0, 8);
+        const victimIsBot = !this.mpNicknames.has(msg.snakeId);
+        const killerLabel = msg.killedBy
+          ? (this.mpNicknames.get(msg.killedBy) ?? msg.killedBy.slice(0, 8))
+          : null;
+        this.killfeed?.add(killerLabel, victimLabel, victimIsBot);
         if (msg.snakeId === snakeId && !this.mpDeathShown) {
           this.mpDeathShown = true;
           void this.handleMpDeath(msg.snakeId, msg.killedBy);
@@ -499,6 +512,7 @@ export class GameScene extends Phaser.Scene {
     for (const view of this.snakeViews.values()) {
       view.render();
     }
+    this.killfeed?.render();
 
     // Render HUD (score + leaderboard + mute) and Minimap using a thin
     // ViewWorld adapter built from the latest snapshot. Each frame is cheap
