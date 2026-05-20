@@ -5,8 +5,6 @@ import { FoodSpawner } from "../food/foodSpawner";
 import { PointerSteering } from "../input/pointer";
 import type { RoomHandle } from "../net/wsClient";
 import { BotManager } from "../sim/botManager";
-import { ClientPrediction } from "../sim/clientPrediction";
-import { SnapshotBuffer, type SnapshotFrame, interpSnake } from "../sim/snapshotBuffer";
 import { World } from "../sim/world";
 import { Snake } from "../snake/snake";
 import { type RenderableSnake, SnakeView } from "../snake/snakeView";
@@ -58,8 +56,6 @@ export class GameScene extends Phaser.Scene {
     foods: FoodRenderState[];
     minimapHeads: MinimapHead[];
   } | null = null;
-  private snapshotBuffer: SnapshotBuffer | null = null;
-  private clientPrediction: ClientPrediction | null = null;
   private mpFoodGraphics: Phaser.GameObjects.Graphics | null = null;
   private lastSentAngle: number | null = null;
   private lastSentBoost: boolean | null = null;
@@ -273,9 +269,6 @@ export class GameScene extends Phaser.Scene {
 
     const snakeId = this.room.snakeId;
 
-    this.snapshotBuffer = new SnapshotBuffer(tuning.net.snapshotBufferSize);
-    this.clientPrediction = new ClientPrediction(snakeId);
-
     // Subscribe to server state snapshots. Cache the player's last-seen
     // length so the death screen has stats to show. Also rebuild the
     // snakeId -> nickname map from the server roster so HUD leaderboard
@@ -283,26 +276,15 @@ export class GameScene extends Phaser.Scene {
     // to the local player's stored name).
     this.mpUnsubs.push(
       this.room.onMessage("state", (msg) => {
-        const frame: SnapshotFrame = {
-          serverTime: msg.serverTime,
-          receivedAt: performance.now(),
-          phase: msg.phase,
-          snakes: msg.snakes,
-          foods: msg.foods,
-          minimapHeads: msg.minimapHeads,
-        };
-        this.snapshotBuffer?.push(frame);
         this.lastSnapshot = {
           snakes: msg.snakes,
           foods: msg.foods,
           minimapHeads: msg.minimapHeads,
         };
-        const playerSnake = msg.snakes.find((s) => s.id === snakeId);
-        if (playerSnake) {
-          this.lastPlayerSegmentCount = playerSnake.segments.length;
-          const result = this.clientPrediction?.reconcile(playerSnake);
-          if (result?.snapped && playerSnake.alive) {
-            this.cameras.main.centerOn(playerSnake.segments[0].x, playerSnake.segments[0].y);
+        for (const s of msg.snakes) {
+          if (s.id === snakeId) {
+            this.lastPlayerSegmentCount = s.segments.length;
+            break;
           }
         }
         this.mpNicknames.clear();
@@ -436,14 +418,9 @@ export class GameScene extends Phaser.Scene {
     // Find the player's snake in the latest snapshot for steering + camera.
     const playerState = this.lastSnapshot?.snakes.find((s) => s.id === this.room?.snakeId);
 
-    let steeringDirX = 0;
-    let steeringDirY = 0;
-
     if (playerState?.alive) {
       const head = playerState.segments[0];
       const { dirX, dirY } = this.steering.update(dt, head.x, head.y);
-      steeringDirX = dirX;
-      steeringDirY = dirY;
 
       // Send input_dir on change (deadband: 0.01 rad). Use shortest-arc
       // difference so a turn across the +pi/-pi seam doesn't trigger a
@@ -469,53 +446,21 @@ export class GameScene extends Phaser.Scene {
         this.soundManager.setBoosting(boost);
       }
 
-      // Camera follows the player's head. Prefer predicted head (instant
-      // feel) over server snapshot head to stay consistent with the rendered
-      // snake. Center using live camera dims - Scale.RESIZE means cam.width
-      // and cam.height track the actual viewport (smaller on phones).
-      const predictedHead = this.clientPrediction?.getSnake()?.segments[0];
-      const cameraHead = predictedHead ?? head;
+      // Camera follows the player's head. Center using the live camera
+      // dimensions instead of a fixed 1280x720 - Scale.RESIZE means cam.width
+      // and cam.height track the actual viewport, which can be much smaller
+      // on a phone in landscape.
       const cam = this.cameras.main;
-      cam.setScroll(cameraHead.x - cam.width / 2, cameraHead.y - cam.height / 2);
+      cam.setScroll(head.x - cam.width / 2, head.y - cam.height / 2);
     } else {
       // No live player - stop boost sound.
       this.soundManager.setBoosting(false);
     }
 
-    // Step local prediction with the steering vector we just used for input.
-    // steeringDirX/steeringDirY captured from input dispatch above.
-    // dt is already in seconds.
-    const latest = this.snapshotBuffer?.latest() ?? null;
-    if (this.clientPrediction && latest?.phase === "playing") {
-      this.clientPrediction.step(dt, steeringDirX, steeringDirY, this.steering.getBoostHeld());
-    }
-
-    if (latest) {
-      const localSnakeId = this.room.snakeId;
-      const renderTime = latest.serverTime - tuning.net.interpolationDelayMs;
-      const bracket = this.snapshotBuffer?.bracket(renderTime) ?? null;
-      const predicted = this.clientPrediction?.getSnake() ?? null;
-      const renderSnakes: SnakeRenderState[] = [];
-      const prevById = new Map(bracket?.prev.snakes.map((s) => [s.id, s]) ?? []);
-      for (const next of bracket?.next.snakes ?? latest.snakes) {
-        if (next.id === localSnakeId && predicted) continue; // rendered from prediction below
-        const prev = prevById.get(next.id);
-        renderSnakes.push(bracket ? interpSnake(prev, next, bracket.alpha) : next);
-      }
-      const serverPlayer = latest.snakes.find((s) => s.id === localSnakeId);
-      if (predicted && serverPlayer) {
-        renderSnakes.push({
-          id: predicted.id,
-          ownerType: "player",
-          color: predicted.color,
-          alive: !predicted.dead,
-          segments: predicted.segments.map((s) => ({ x: s.x, y: s.y })),
-          boostActive: predicted.boostActive,
-          scale: serverPlayer.scale,
-        });
-      }
-      this.syncMpSnakes(renderSnakes);
-      this.syncMpFoods(latest.foods);
+    // Render the latest snapshot via the reconciler.
+    if (this.lastSnapshot) {
+      this.syncMpSnakes(this.lastSnapshot.snakes);
+      this.syncMpFoods(this.lastSnapshot.foods);
     }
     for (const view of this.snakeViews.values()) {
       view.render();
