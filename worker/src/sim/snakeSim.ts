@@ -150,6 +150,7 @@ export class SnakeSim {
         x: h.x,
         y: h.y,
         dead: snake.dead,
+        length: snake.segments.length,
       });
       // Snake segments only included for nearby snakes (rendering cost).
       const dx = h.x - cullCenterX;
