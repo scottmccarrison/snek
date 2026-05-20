@@ -120,6 +120,13 @@ export interface Tuning {
     muteButtonSizePx: number;
     alwaysShowPlayerRow: boolean;
   };
+  killfeed: {
+    maxRows: number;
+    entryTtlMs: number;
+    fontSize: number;
+    insetTopPx: number;
+    rowHeightPx: number;
+  };
 }
 
 export const tuning: Tuning = {
@@ -265,5 +272,12 @@ export const tuning: Tuning = {
     playerHighlightColor: 0xffeb3b,
     muteButtonSizePx: 44,
     alwaysShowPlayerRow: true,
+  },
+  killfeed: {
+    maxRows: 5,
+    entryTtlMs: 5000,
+    fontSize: 14,
+    insetTopPx: 200, // below the HUD leaderboard which occupies the top-right
+    rowHeightPx: 18,
   },
 };
