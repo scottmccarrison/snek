@@ -20,6 +20,21 @@ export class ServerBotManager {
   // Called each PLAYING-phase tick from Room.alarm(). Spawns bots to fill,
   // despawns excess when humans join, drives bot AI for the current frame.
   update(sim: SnakeSim, humanSnakeCount: number, dt: number): void {
+    // Reap dead bots first. Snake.dead is set by World on snake-vs-snake
+    // collision or wall hit; the bot's brain entry would otherwise persist.
+    // Without this reap, dead-but-still-in-world bots keep the brains count
+    // unchanged so the spawn-refill loop below never kicks in, and their
+    // corpses linger in snapshots forever (no client-driven respawn for bots).
+    const deadIds: string[] = [];
+    for (const id of this.brains.keys()) {
+      const snake = sim.world.snakes.get(id);
+      if (!snake || snake.dead) deadIds.push(id);
+    }
+    for (const id of deadIds) {
+      sim.world.removeSnake(id);
+      this.brains.delete(id);
+    }
+
     // Despawn excess. Iterate brains keys in insertion order (oldest first).
     while (this.brains.size + humanSnakeCount > tuning.net.totalSnakesPerRoom) {
       const oldest = this.brains.keys().next().value as string | undefined;

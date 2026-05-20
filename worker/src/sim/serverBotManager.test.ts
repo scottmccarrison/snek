@@ -44,6 +44,25 @@ describe("ServerBotManager", () => {
     expect(bots).toBe(tuning.net.totalSnakesPerRoom - 3);
   });
 
+  it("reaps dead bots and refills via spawn loop", () => {
+    const sim = new SnakeSim(1);
+    const mgr = new ServerBotManager(2);
+    mgr.update(sim, 0, 1 / 20);
+    expect(sim.world.snakes.size).toBe(tuning.net.totalSnakesPerRoom);
+    // Kill 3 bots. Mark snake.dead directly to simulate post-collision state.
+    const killIds = Array.from(sim.world.snakes.keys()).slice(0, 3);
+    for (const id of killIds) {
+      const s = sim.world.snakes.get(id);
+      if (s) s.dead = true;
+    }
+    // Next update should reap the dead bots and spawn 3 new ones.
+    mgr.update(sim, 0, 1 / 20);
+    expect(sim.world.snakes.size).toBe(tuning.net.totalSnakesPerRoom);
+    for (const s of sim.world.snakes.values()) expect(s.dead).toBe(false);
+    // Dead ids are gone from the world (replaced by fresh bots with new ids).
+    for (const id of killIds) expect(sim.world.snakes.has(id)).toBe(false);
+  });
+
   it("bot AI drives pendingDir each tick", () => {
     const sim = new SnakeSim(1);
     const mgr = new ServerBotManager(2);
