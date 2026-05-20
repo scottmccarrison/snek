@@ -129,7 +129,6 @@ export class SnakeSim {
   snapshot(
     cullCenterX: number,
     cullCenterY: number,
-    nicknameLookup?: (id: string) => string | undefined,
   ): {
     snakes: SnakeRenderState[];
     foods: FoodRenderState[];
@@ -164,7 +163,6 @@ export class SnakeSim {
         segments: snake.segments.map((s) => ({ x: s.x, y: s.y })),
         boostActive: snake.boostActive,
         scale: snake.scale,
-        nickname: nicknameLookup?.(snake.id),
       });
     }
     const foodItems = this.foodState.queryWithin(cullCenterX, cullCenterY, cullR);

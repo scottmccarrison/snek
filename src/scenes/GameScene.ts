@@ -16,8 +16,8 @@ import { Minimap } from "../ui/minimap";
 
 // Deterministic 3-letter initials derived from a snake id. Same id always
 // produces the same initials so the leaderboard reads stably across frames.
-// Used for client-side bots in solo mode (server-side bots in MP carry their
-// own server-assigned random initials via SnakeRenderState.nickname).
+// Solo-mode only - in MP the leaderboard shows the bot's snake id directly
+// (bot1, bot2, ...) since bot display names aren't sent over the wire.
 function initialsFromId(id: string): string {
   let h = 0;
   for (let i = 0; i < id.length; i++) {
@@ -472,15 +472,11 @@ export class GameScene extends Phaser.Scene {
     // cached internally.
     if (this.lastSnapshot && playerState) {
       const head = playerState.segments[0];
-      // Build a per-frame snakeId -> nickname map combining the roster (humans)
-      // and the snapshot (bots). Snapshot nickname takes precedence for bot
-      // ids so server-assigned labels are shown.
-      const snapNicks = new Map<string, string>();
-      for (const s of this.lastSnapshot.snakes) {
-        if (s.nickname) snapNicks.set(s.id, s.nickname);
-      }
+      // Humans get nicknames via the players roster (mpNicknames). Bots
+      // have no display name on the wire - the HUD falls back to the
+      // snake id slice for those rows.
       const lookup = (id: string): string | undefined => {
-        return this.mpNicknames.get(id) ?? snapNicks.get(id);
+        return this.mpNicknames.get(id);
       };
       // HUD leaderboard + Minimap both use minimapHeads (full world, not
       // viewport-culled). Without this, far-away bots wouldn't appear in
