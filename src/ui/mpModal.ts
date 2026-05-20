@@ -92,6 +92,8 @@ export class MpModal {
   switchToLobby(room: RoomHandle, code: string): void {
     this.room = room;
     this.myReady = false;
+    // Clear any "joining..." / "creating..." status from the pre-join flow.
+    this.setStatus("");
     // Hide prejoin UI.
     const hostBtn = this.el.querySelector<HTMLButtonElement>(".snek-mp-host");
     const joinRow = this.el.querySelector<HTMLDivElement>(".snek-mp-join-row");
