@@ -61,7 +61,6 @@ export class GameScene extends Phaser.Scene {
   } | null = null;
   private snapshotBuffer: SnapshotBuffer | null = null;
   private jitterMonitor: JitterMonitor | null = null;
-  private ownSmoothedSegments: Array<{ x: number; y: number }> = [];
   private mpFoodGraphics: Phaser.GameObjects.Graphics | null = null;
   private lastSentAngle: number | null = null;
   private lastSentBoost: boolean | null = null;
@@ -100,7 +99,6 @@ export class GameScene extends Phaser.Scene {
     this.lastSnapshot = null;
     this.snapshotBuffer = null;
     this.jitterMonitor = null;
-    this.ownSmoothedSegments = [];
     this.lastSentAngle = null;
     this.lastSentBoost = null;
     this.mpDeathShown = false;
@@ -456,7 +454,7 @@ export class GameScene extends Phaser.Scene {
     const playerState = this.lastSnapshot?.snakes.find((s) => s.id === this.room?.snakeId);
 
     if (playerState?.alive) {
-      const head = this.ownSmoothedSegments[0] ?? playerState.segments[0];
+      const head = playerState.segments[0];
       const { dirX, dirY } = this.steering.update(dt, head.x, head.y);
 
       // Send input_dir on change (deadband: 0.01 rad). Use shortest-arc
@@ -513,12 +511,7 @@ export class GameScene extends Phaser.Scene {
       const renderSnakes: SnakeRenderState[] = [];
       for (const s of latest.snakes) {
         if (s.id === localId) {
-          this.updateOwnSmoothedSegments(s.segments, dt);
-          renderSnakes.push({
-            ...s,
-            // Copy out so SnakeView/death-anim don't see further mutations.
-            segments: this.ownSmoothedSegments.map((p) => ({ x: p.x, y: p.y })),
-          });
+          renderSnakes.push(s);
         } else if (bracket) {
           const prev = prevById.get(s.id);
           const next = nextById.get(s.id) ?? s;
@@ -540,7 +533,7 @@ export class GameScene extends Phaser.Scene {
     // since the snapshot is small (10-14 snakes max) and HUD setText is
     // cached internally.
     if (this.lastSnapshot && playerState) {
-      const head = this.ownSmoothedSegments[0] ?? playerState.segments[0];
+      const head = playerState.segments[0];
       // Humans get nicknames via the players roster (mpNicknames). Bots
       // have no display name on the wire - the HUD falls back to the
       // snake id slice for those rows.
@@ -582,38 +575,6 @@ export class GameScene extends Phaser.Scene {
         },
       };
       this.minimap.render(head.x, head.y, minimapWorld);
-    }
-  }
-
-  private updateOwnSmoothedSegments(
-    target: ReadonlyArray<{ x: number; y: number }>,
-    dtSec: number,
-  ): void {
-    if (target.length === 0) return;
-    // Reset on count change (growth, death, respawn) or first frame.
-    if (this.ownSmoothedSegments.length !== target.length) {
-      this.ownSmoothedSegments = target.map((p) => ({ x: p.x, y: p.y }));
-      return;
-    }
-    // Snap-reset if the target head jumped far (respawn, teleport).
-    const cur = this.ownSmoothedSegments[0];
-    const tHead = target[0];
-    const dx = tHead.x - cur.x;
-    const dy = tHead.y - cur.y;
-    const snapSq =
-      tuning.net.ownSnakeSmoothSnapThresholdPx * tuning.net.ownSnakeSmoothSnapThresholdPx;
-    if (dx * dx + dy * dy > snapSq) {
-      this.ownSmoothedSegments = target.map((p) => ({ x: p.x, y: p.y }));
-      return;
-    }
-    // Frame-rate independent exponential decay toward target.
-    const halfLifeSec = tuning.net.ownSnakeSmoothHalfLifeMs / 1000;
-    const alpha = 1 - 0.5 ** (dtSec / halfLifeSec);
-    for (let i = 0; i < target.length; i++) {
-      const s = this.ownSmoothedSegments[i];
-      const t = target[i];
-      s.x += (t.x - s.x) * alpha;
-      s.y += (t.y - s.y) * alpha;
     }
   }
 
