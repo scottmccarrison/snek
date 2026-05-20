@@ -63,6 +63,10 @@ export class Room {
   private readyStates = new Map<string, boolean>();
   // sessionId -> { nickname, colorIdx, joinOrder }
   private playerMeta = new Map<string, { nickname: string; colorIdx: number; joinOrder: number }>();
+  // Non-persistent: timestamps of recent reconnects per sessionId. Used to
+  // log suspected abuse (rapid disconnect/reconnect cycles). Entries older
+  // than 30s are dropped on each insert.
+  private reconnectAttempts = new Map<string, number[]>();
   private nextJoinOrder = 0;
 
   constructor(state: DurableObjectState, env: Env) {
@@ -105,6 +109,14 @@ export class Room {
       snakeId = existing.snakeId;
       this.resumeTokens.delete(existing.sessionId);
       resumeToken = randomHex(32);
+      // Log rapid reconnect cycles (no enforcement, just visibility).
+      const now = Date.now();
+      const recent = (this.reconnectAttempts.get(sessionId) ?? []).filter((t) => now - t < 30_000);
+      recent.push(now);
+      this.reconnectAttempts.set(sessionId, recent);
+      if (recent.length > 5) {
+        console.warn(`[abuse] rapid-reconnect session=${sessionId} count=${recent.length}`);
+      }
       const snake = sim.world.snakes.get(snakeId);
       if (snake?.dead) {
         sim.respawnSnake(snakeId, snake.color);
@@ -457,6 +469,7 @@ export class Room {
         this.resumeTokens.delete(k);
         this.playerMeta.delete(k);
         this.readyStates.delete(k);
+        this.reconnectAttempts.delete(k);
       }
     }
   }
