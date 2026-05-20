@@ -14,6 +14,23 @@ import { JoystickIndicator } from "../ui/joystickIndicator";
 import { type GameoverStats, MainMenu } from "../ui/mainMenu";
 import { Minimap } from "../ui/minimap";
 
+// Deterministic 3-letter initials derived from a snake id. Same id always
+// produces the same initials so the leaderboard reads stably across frames.
+// Used for client-side bots in solo mode (server-side bots in MP carry their
+// own server-assigned random initials via SnakeRenderState.nickname).
+function initialsFromId(id: string): string {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) {
+    h = (Math.imul(h, 31) + id.charCodeAt(i)) | 0;
+  }
+  const a = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  return (
+    a[Math.abs(h) % 26] +
+    a[Math.abs(Math.imul(h, 7) + 1) % 26] +
+    a[Math.abs(Math.imul(h, 13) + 7) % 26]
+  );
+}
+
 export class GameScene extends Phaser.Scene {
   private world!: World;
   private botManager!: BotManager;
@@ -385,11 +402,13 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.minimap.render(head.x, head.y, this.world);
-    // Solo nickname lookup: player row shows stored initials (or 'YOU' if
-    // none set), bots show 'BOT'.
+    // Solo nickname lookup: player row shows stored initials; bots get
+    // deterministic random 3-letter initials based on a hash of their id
+    // (so 'bot-3' always reads the same letters across the run, making
+    // the leaderboard feel like a populated room).
     this.hud.render(player, this.world, (id) => {
       if (id === "player") return this.soloPlayerNickname || undefined;
-      return "BOT";
+      return initialsFromId(id);
     });
   }
 
@@ -453,16 +472,9 @@ export class GameScene extends Phaser.Scene {
     // cached internally.
     if (this.lastSnapshot && playerState) {
       const head = playerState.segments[0];
-      const viewSnakes = this.lastSnapshot.snakes.map((s) => ({
-        id: s.id,
-        color: s.color,
-        segments: s.segments,
-        dead: !s.alive,
-      }));
-      const viewWorld = { snakes: { values: () => viewSnakes.values() } };
       // Build a per-frame snakeId -> nickname map combining the roster (humans)
       // and the snapshot (bots). Snapshot nickname takes precedence for bot
-      // ids so server-assigned labels ('BO1', 'BO2', ...) are shown.
+      // ids so server-assigned labels are shown.
       const snapNicks = new Map<string, string>();
       for (const s of this.lastSnapshot.snakes) {
         if (s.nickname) snapNicks.set(s.id, s.nickname);
@@ -470,11 +482,26 @@ export class GameScene extends Phaser.Scene {
       const lookup = (id: string): string | undefined => {
         return this.mpNicknames.get(id) ?? snapNicks.get(id);
       };
-      this.hud.render({ segments: { length: playerState.segments.length } }, viewWorld, lookup);
-      // Minimap uses minimapHeads (whole world, not viewport-culled) so
-      // distant bots still appear as dots. Build a thin MinimapWorld
-      // adapter that wraps each head into a single-segment snake.
+      // HUD leaderboard + Minimap both use minimapHeads (full world, not
+      // viewport-culled). Without this, far-away bots wouldn't appear in
+      // either. HUD's adapter uses a sparse array for segments (only
+      // .length is read). Minimap's adapter uses a single-segment array
+      // with the head position.
       const heads = this.lastSnapshot.minimapHeads;
+      const fullWorld = {
+        snakes: {
+          *values() {
+            for (const h of heads) {
+              yield {
+                id: h.id,
+                segments: new Array(h.length) as ReadonlyArray<{ x: number; y: number }>,
+                dead: h.dead,
+              };
+            }
+          },
+        },
+      };
+      this.hud.render({ segments: { length: playerState.segments.length } }, fullWorld, lookup);
       const minimapWorld = {
         snakes: {
           *values() {

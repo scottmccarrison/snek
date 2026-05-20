@@ -18,14 +18,18 @@ export interface FoodRenderState {
   isPellet: boolean;
 }
 
-// Minimap-friendly view of every snake regardless of viewport cull. Heads
-// only - no segments. Sent every tick so the minimap shows the whole world.
+// Lightweight view of every snake regardless of viewport cull. Sent every
+// tick so the minimap shows the whole world AND the HUD leaderboard can
+// rank all snakes (not just the ones whose segments are in view). Heads
+// only - no segments arrays - but length is included so the leaderboard
+// has the right ordering.
 export interface MinimapHead {
   id: string;
   color: number;
   x: number;
   y: number;
   dead: boolean;
+  length: number;
 }
 
 export type ClientMsg =
