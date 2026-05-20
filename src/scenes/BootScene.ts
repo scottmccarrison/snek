@@ -62,8 +62,13 @@ export class BootScene extends Phaser.Scene {
     this.mainMenu.show("title");
 
     // Deep link: ?room=XXXX auto-opens MpModal and pre-fills the code.
-    const presetCode = params.get("room");
-    if (presetCode) {
+    const rawCode = params.get("room");
+    // Scrub the query string after reading so refresh doesn't re-trigger.
+    if (params.has("room")) {
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+    const presetCode = rawCode ? rawCode.toUpperCase() : null;
+    if (presetCode && /^[A-Z]{4}$/.test(presetCode)) {
       this.mainMenu.hide();
       this.mpModal = new MpModal({
         onGameStart: (room, code) => {
@@ -85,7 +90,7 @@ export class BootScene extends Phaser.Scene {
       // Best-effort: fill the code input and click Join after a tick.
       setTimeout(() => {
         const input = document.querySelector<HTMLInputElement>(".snek-mp-code");
-        if (input) input.value = presetCode.toUpperCase();
+        if (input) input.value = presetCode;
         document.querySelector<HTMLButtonElement>(".snek-mp-join")?.click();
       }, 100);
     }

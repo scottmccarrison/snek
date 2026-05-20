@@ -111,6 +111,18 @@
   letter-spacing: 4px;
   font-size: 18px;
 }
+.snek-mp-lobby-code-and-qr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.snek-mp-lobby-qr {
+  width: 120px;
+  height: 120px;
+  background: transparent;
+  display: block;
+}
 .snek-mp-roster {
   list-style: none;
   padding: 6px 10px;

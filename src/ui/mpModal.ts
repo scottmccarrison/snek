@@ -1,6 +1,7 @@
 import type { PlayerRosterEntry } from "../../shared/protocol";
 import { type NetClient, makeNetClient } from "../net/client";
 import type { RoomHandle } from "../net/wsClient";
+import { renderQrCanvas } from "./qrCode";
 
 export interface MpModalCallbacks {
   onGameStart: (room: RoomHandle, code: string) => void;
@@ -37,7 +38,10 @@ export class MpModal {
       <button class="snek-mp-cancel">Cancel</button>
       <div class="snek-mp-status"></div>
       <div class="snek-mp-lobby" style="display:none">
-        <div class="snek-mp-lobby-title">Room <span class="snek-mp-lobby-code"></span></div>
+        <div class="snek-mp-lobby-code-and-qr">
+          <div class="snek-mp-lobby-title">Room <span class="snek-mp-lobby-code"></span></div>
+          <canvas class="snek-mp-lobby-qr" width="120" height="120"></canvas>
+        </div>
         <ol class="snek-mp-roster"></ol>
         <button class="snek-mp-ready">READY</button>
       </div>
@@ -100,6 +104,14 @@ export class MpModal {
     if (lobby) lobby.style.display = "block";
     const codeSpan = this.el.querySelector<HTMLSpanElement>(".snek-mp-lobby-code");
     if (codeSpan) codeSpan.textContent = code;
+    // Render QR code pointing at the share URL.
+    const qrCanvas = this.el.querySelector<HTMLCanvasElement>(".snek-mp-lobby-qr");
+    if (qrCanvas) {
+      const shareUrl = `https://mccarrison.me/snek/?room=${code}`;
+      renderQrCanvas(qrCanvas, shareUrl, 120).catch((err) => {
+        console.warn(`[qr] render failed: ${err}`);
+      });
+    }
     // READY toggle.
     const readyBtn = this.el.querySelector<HTMLButtonElement>(".snek-mp-ready");
     if (readyBtn) {
