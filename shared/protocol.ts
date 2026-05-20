@@ -8,7 +8,6 @@ export interface SnakeRenderState {
   segments: Array<{ x: number; y: number }>;
   boostActive: boolean;
   scale: number; // pre-computed so client doesn't redo log/sqrt math
-  nickname?: string; // populated for bots by ServerBotManager; human nicknames come via the players roster
 }
 
 export interface FoodRenderState {
@@ -21,8 +20,9 @@ export interface FoodRenderState {
 // Lightweight view of every snake regardless of viewport cull. Sent every
 // tick so the minimap shows the whole world AND the HUD leaderboard can
 // rank all snakes (not just the ones whose segments are in view). Heads
-// only - no segments arrays - but length is included so the leaderboard
-// has the right ordering.
+// only - no segments arrays - but length and nickname are included so the
+// leaderboard has the right ordering and the right display label even for
+// snakes whose bodies are outside the viewport cull.
 export interface MinimapHead {
   id: string;
   color: number;
@@ -30,6 +30,7 @@ export interface MinimapHead {
   y: number;
   dead: boolean;
   length: number;
+  nickname?: string;
 }
 
 export type ClientMsg =

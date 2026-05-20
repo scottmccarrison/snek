@@ -151,6 +151,7 @@ export class SnakeSim {
         y: h.y,
         dead: snake.dead,
         length: snake.segments.length,
+        nickname: nicknameLookup?.(snake.id),
       });
       // Snake segments only included for nearby snakes (rendering cost).
       const dx = h.x - cullCenterX;
@@ -164,7 +165,6 @@ export class SnakeSim {
         segments: snake.segments.map((s) => ({ x: s.x, y: s.y })),
         boostActive: snake.boostActive,
         scale: snake.scale,
-        nickname: nicknameLookup?.(snake.id),
       });
     }
     const foodItems = this.foodState.queryWithin(cullCenterX, cullCenterY, cullR);

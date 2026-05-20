@@ -258,9 +258,9 @@ export class HUD {
   /**
    * Render with an optional `nicknameLookup` that maps snake id -> display
    * name. Solo callers pass a function that returns the local player's
-   * stored initials for the player snake and 'BOT' for the rest. MP callers
-   * pass a lookup built from the latest `state.players[]` roster so other
-   * humans appear by their initials.
+   * stored initials for the player snake and deterministic id-derived
+   * initials for bots. MP callers pass a lookup composed from the
+   * `state.players[]` roster (humans) and `MinimapHead.nickname` (bots).
    */
   render(
     player: ViewPlayer,

@@ -17,7 +17,7 @@ import { Minimap } from "../ui/minimap";
 // Deterministic 3-letter initials derived from a snake id. Same id always
 // produces the same initials so the leaderboard reads stably across frames.
 // Used for client-side bots in solo mode (server-side bots in MP carry their
-// own server-assigned random initials via SnakeRenderState.nickname).
+// own server-assigned random initials via MinimapHead.nickname).
 function initialsFromId(id: string): string {
   let h = 0;
   for (let i = 0; i < id.length; i++) {
@@ -472,22 +472,23 @@ export class GameScene extends Phaser.Scene {
     // cached internally.
     if (this.lastSnapshot && playerState) {
       const head = playerState.segments[0];
-      // Build a per-frame snakeId -> nickname map combining the roster (humans)
-      // and the snapshot (bots). Snapshot nickname takes precedence for bot
-      // ids so server-assigned labels are shown.
-      const snapNicks = new Map<string, string>();
-      for (const s of this.lastSnapshot.snakes) {
-        if (s.nickname) snapNicks.set(s.id, s.nickname);
-      }
-      const lookup = (id: string): string | undefined => {
-        return this.mpNicknames.get(id) ?? snapNicks.get(id);
-      };
       // HUD leaderboard + Minimap both use minimapHeads (full world, not
       // viewport-culled). Without this, far-away bots wouldn't appear in
       // either. HUD's adapter uses a sparse array for segments (only
       // .length is read). Minimap's adapter uses a single-segment array
       // with the head position.
       const heads = this.lastSnapshot.minimapHeads;
+      // Bot nicknames ride on MinimapHead so distant bots still get a
+      // display label. Humans take precedence via the roster-derived
+      // mpNicknames, which is also the source of truth for the local
+      // player's own row.
+      const headsNicks = new Map<string, string>();
+      for (const h of heads) {
+        if (h.nickname) headsNicks.set(h.id, h.nickname);
+      }
+      const lookup = (id: string): string | undefined => {
+        return this.mpNicknames.get(id) ?? headsNicks.get(id);
+      };
       const fullWorld = {
         snakes: {
           *values() {
