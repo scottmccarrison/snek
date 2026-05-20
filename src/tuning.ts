@@ -9,6 +9,14 @@ export interface Tuning {
     maxInputsPerSecPerClient: number;
     maxClientLogPerSecPerSocket: number;
     nicknameMaxLen: number;
+    // Phase 6.2: render delay for remote snakes (~1.5 server ticks).
+    // More delay = smoother under jitter but more visible lag on remotes.
+    interpolationDelayMs: number;
+    // Phase 6.2: snapshots to keep in client buffer. Covers interpDelay + margin.
+    snapshotBufferSize: number;
+    // Phase 6.1: snap-reset local prediction if head drifts further than this
+    // from the server snapshot. Tune up if snaps are too frequent.
+    predictionSnapThresholdPx: number;
   };
   snake: {
     speedPxPerSec: number;
@@ -131,6 +139,14 @@ export const tuning: Tuning = {
     maxInputsPerSecPerClient: 60,
     maxClientLogPerSecPerSocket: 30,
     nicknameMaxLen: 3,
+    // Phase 6.2: render delay for remote snakes (~1.5 server ticks).
+    // More delay = smoother under jitter but more visible lag on remotes.
+    interpolationDelayMs: 75,
+    // Phase 6.2: snapshots to keep in client buffer. Covers interpDelay + margin.
+    snapshotBufferSize: 8,
+    // Phase 6.1: snap-reset local prediction if head drifts further than this
+    // from the server snapshot. Tune up if snaps are too frequent.
+    predictionSnapThresholdPx: 60,
   },
   snake: {
     speedPxPerSec: 180,
