@@ -438,9 +438,21 @@ export class Room {
   // GC expired resume tokens AND any per-player metadata orphaned by the
   // expired session (a non-host disconnect that aged past the grace window
   // means the player isn't coming back - drop their roster entry too).
+  //
+  // Live sessions are skipped: tokens are issued with a 60s TTL at connect
+  // time and only refreshed on websocketClose. A player who stays
+  // connected longer than the TTL would otherwise have their playerMeta
+  // wiped mid-game, causing their nickname to drop from the broadcast
+  // roster and the client to render their snake as "p_<id-prefix>".
   private gcExpiredResumeTokens(): void {
+    const liveSessionIds = new Set<string>();
+    for (const ws of this.state.getWebSockets()) {
+      const att = ws.deserializeAttachment() as SocketAttachment | null;
+      if (att) liveSessionIds.add(att.sessionId);
+    }
     const now = Date.now();
     for (const [k, v] of this.resumeTokens) {
+      if (liveSessionIds.has(k)) continue;
       if (v.expiresAt < now) {
         this.resumeTokens.delete(k);
         this.playerMeta.delete(k);
