@@ -4,14 +4,12 @@ import { tuning } from "../../../src/tuning";
 import type { SnakeSim } from "./snakeSim";
 
 export interface SerializedServerBotManager {
-  nicknames: Record<string, string>;
   nextBotId: number;
   rngState: number;
 }
 
 export class ServerBotManager {
   private brains = new Map<string, BotBrain>();
-  private nicknames = new Map<string, string>();
   private rng: SeededRng;
   private nextBotId = 1;
 
@@ -28,7 +26,6 @@ export class ServerBotManager {
       if (!oldest) break;
       sim.world.removeSnake(oldest);
       this.brains.delete(oldest);
-      this.nicknames.delete(oldest);
     }
 
     // Spawn fillers.
@@ -52,22 +49,13 @@ export class ServerBotManager {
     }
   }
 
-  // Build a snakeId -> nickname map for the snapshot to include.
-  getNicknames(): Map<string, string> {
-    return this.nicknames;
-  }
-
   // Wipes all bot state (used on idle teardown and on game_ended).
   clear(): void {
     this.brains.clear();
-    this.nicknames.clear();
   }
 
   serialize(): SerializedServerBotManager {
-    const ns: Record<string, string> = {};
-    for (const [k, v] of this.nicknames) ns[k] = v;
     return {
-      nicknames: ns,
       nextBotId: this.nextBotId,
       rngState: this.rng.getState(),
     };
@@ -81,9 +69,6 @@ export class ServerBotManager {
     const mgr = new ServerBotManager(1);
     mgr.rng.setState(data.rngState);
     mgr.nextBotId = data.nextBotId;
-    for (const [k, v] of Object.entries(data.nicknames)) {
-      mgr.nicknames.set(k, v);
-    }
     for (const [id, snake] of sim.world.snakes) {
       if (snake.ownerType === "bot") {
         // BotBrain accepts an optional personality and an optional rng.
@@ -96,13 +81,6 @@ export class ServerBotManager {
 
   private spawnOneBot(sim: SnakeSim): void {
     const id = `bot${this.nextBotId++}`;
-    // Random 3-letter initials so the leaderboard reads like a full lobby
-    // rather than 'BO1, BO2, BO3'. Re-roll up to 8 times if the rolled
-    // initials collide with an already-in-use bot nickname (26^3 = 17576
-    // possible combos for 9 bots; collisions are rare).
-    const used = new Set(this.nicknames.values());
-    let nickname = this.randomInitials();
-    for (let i = 0; i < 8 && used.has(nickname); i++) nickname = this.randomInitials();
     const palette = tuning.bot.palette;
     const colorIdx = this.rng.int(palette.length);
     const color = palette[colorIdx];
@@ -111,12 +89,6 @@ export class ServerBotManager {
     const { x, y } = this.pickSafeSpawnPoint(sim);
     sim.addBot(id, color, x, y);
     this.brains.set(id, new BotBrain(undefined, this.rng));
-    this.nicknames.set(id, nickname);
-  }
-
-  private randomInitials(): string {
-    const a = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    return a[this.rng.int(26)] + a[this.rng.int(26)] + a[this.rng.int(26)];
   }
 
   private pickSafeSpawnPoint(sim: SnakeSim): { x: number; y: number } {

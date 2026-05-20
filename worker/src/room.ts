@@ -472,17 +472,8 @@ export class Room {
     const players = this.buildPlayersList();
     const sockets = this.state.getWebSockets();
 
-    // Build the combined nickname lookup: human nicknames from playerMeta +
-    // bot nicknames from botManager.
-    const botNicknames = this.botManager?.getNicknames();
-    const nicknameLookup = (id: string): string | undefined => {
-      // Human snakes have id "p_<sessionId>". Look up via playerMeta.
-      if (id.startsWith("p_")) {
-        const sessionId = id.slice(2);
-        return this.playerMeta.get(sessionId)?.nickname;
-      }
-      return botNicknames?.get(id);
-    };
+    // Human nicknames travel via the players roster (msg.players). Bots
+    // have no display name; the client renders them by their snake id.
 
     for (const ws of sockets) {
       const attachment = ws.deserializeAttachment() as SocketAttachment | null;
@@ -490,7 +481,7 @@ export class Room {
       const snake = this.sim.world.snakes.get(attachment.snakeId);
       const cullCx = snake ? snake.segments[0].x : tuning.world.widthPx / 2;
       const cullCy = snake ? snake.segments[0].y : tuning.world.heightPx / 2;
-      const snap = this.sim.snapshot(cullCx, cullCy, nicknameLookup);
+      const snap = this.sim.snapshot(cullCx, cullCy);
       const stateMsg: ServerMsg = {
         type: "state",
         serverTime: Date.now(),

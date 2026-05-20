@@ -44,20 +44,6 @@ describe("ServerBotManager", () => {
     expect(bots).toBe(tuning.net.totalSnakesPerRoom - 3);
   });
 
-  it("assigns random 3-letter A-Z nicknames, unique per bot", () => {
-    const sim = new SnakeSim(1);
-    const mgr = new ServerBotManager(2);
-    mgr.update(sim, 0, 1 / 20);
-    const names = Array.from(mgr.getNicknames().values());
-    expect(names.length).toBe(tuning.net.totalSnakesPerRoom);
-    for (const n of names) {
-      expect(n.length).toBe(3);
-      expect(/^[A-Z]{3}$/.test(n)).toBe(true);
-    }
-    // Unique (collisions are statistically rare for 10 names from 26^3).
-    expect(new Set(names).size).toBe(names.length);
-  });
-
   it("bot AI drives pendingDir each tick", () => {
     const sim = new SnakeSim(1);
     const mgr = new ServerBotManager(2);
@@ -71,14 +57,12 @@ describe("ServerBotManager", () => {
     expect(withDir).toBeGreaterThan(0);
   });
 
-  it("serialize then restore preserves nicknames + nextBotId + rng", () => {
+  it("serialize then restore preserves nextBotId", () => {
     const sim = new SnakeSim(1);
     const mgr = new ServerBotManager(2);
     mgr.update(sim, 0, 1 / 20);
     const data = mgr.serialize();
     const restored = ServerBotManager.restore(data, sim);
-    expect(Array.from(restored.getNicknames().entries()).sort()).toEqual(
-      Array.from(mgr.getNicknames().entries()).sort(),
-    );
+    expect(restored.serialize().nextBotId).toBe(data.nextBotId);
   });
 });
