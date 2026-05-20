@@ -27,11 +27,12 @@ export class SnapshotBuffer {
 
   // Reject non-monotonic frames (DO restart / clock skew would otherwise
   // produce out-of-range alpha in bracket()).
-  push(frame: SnapshotFrame): void {
+  push(frame: SnapshotFrame): boolean {
     const last = this.frames[this.frames.length - 1];
-    if (last && frame.serverTime < last.serverTime) return;
+    if (last && frame.serverTime < last.serverTime) return false;
     this.frames.push(frame);
     while (this.frames.length > this.maxFrames) this.frames.shift();
+    return true;
   }
 
   latest(): SnapshotFrame | null {
