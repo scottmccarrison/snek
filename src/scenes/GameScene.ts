@@ -5,6 +5,7 @@ import { FoodSpawner } from "../food/foodSpawner";
 import { PointerSteering } from "../input/pointer";
 import type { RoomHandle } from "../net/wsClient";
 import { BotManager } from "../sim/botManager";
+import { SnapshotBuffer, type SnapshotFrame, interpSnake } from "../sim/snapshotBuffer";
 import { World } from "../sim/world";
 import { Snake } from "../snake/snake";
 import { type RenderableSnake, SnakeView } from "../snake/snakeView";
@@ -56,6 +57,7 @@ export class GameScene extends Phaser.Scene {
     foods: FoodRenderState[];
     minimapHeads: MinimapHead[];
   } | null = null;
+  private snapshotBuffer: SnapshotBuffer | null = null;
   private mpFoodGraphics: Phaser.GameObjects.Graphics | null = null;
   private lastSentAngle: number | null = null;
   private lastSentBoost: boolean | null = null;
@@ -91,6 +93,7 @@ export class GameScene extends Phaser.Scene {
     // Reset MP tracking state on each init so a restart is clean.
     this.mpSnakeStates.clear();
     this.lastSnapshot = null;
+    this.snapshotBuffer = null;
     this.lastSentAngle = null;
     this.lastSentBoost = null;
     this.mpDeathShown = false;
@@ -267,6 +270,8 @@ export class GameScene extends Phaser.Scene {
     // MP food graphics layer (redrawn each frame from snapshot).
     this.mpFoodGraphics = this.add.graphics();
 
+    this.snapshotBuffer = new SnapshotBuffer(tuning.net.snapshotBufferSize);
+
     const snakeId = this.room.snakeId;
 
     // Subscribe to server state snapshots. Cache the player's last-seen
@@ -281,6 +286,15 @@ export class GameScene extends Phaser.Scene {
           foods: msg.foods,
           minimapHeads: msg.minimapHeads,
         };
+        const frame: SnapshotFrame = {
+          serverTime: msg.serverTime,
+          receivedAt: performance.now(),
+          phase: msg.phase,
+          snakes: msg.snakes,
+          foods: msg.foods,
+          minimapHeads: msg.minimapHeads,
+        };
+        this.snapshotBuffer?.push(frame);
         for (const s of msg.snakes) {
           if (s.id === snakeId) {
             this.lastPlayerSegmentCount = s.segments.length;
@@ -457,10 +471,30 @@ export class GameScene extends Phaser.Scene {
       this.soundManager.setBoosting(false);
     }
 
-    // Render the latest snapshot via the reconciler.
-    if (this.lastSnapshot) {
-      this.syncMpSnakes(this.lastSnapshot.snakes);
-      this.syncMpFoods(this.lastSnapshot.foods);
+    // Render: remote snakes are interpolated between bracketing snapshots
+    // (smooths the 50ms server tick into per-frame motion). Local player's
+    // snake renders from the latest snapshot directly - no added lag.
+    const latest = this.snapshotBuffer?.latest();
+    if (latest) {
+      const localId = this.room?.snakeId;
+      const renderTime = latest.serverTime - tuning.net.interpolationDelayMs;
+      const bracket = this.snapshotBuffer?.bracket(renderTime) ?? null;
+      const prevById = new Map(bracket?.prev.snakes.map((s) => [s.id, s]) ?? []);
+      const nextById = new Map(bracket?.next.snakes.map((s) => [s.id, s]) ?? []);
+      const renderSnakes: SnakeRenderState[] = [];
+      for (const s of latest.snakes) {
+        if (s.id === localId) {
+          renderSnakes.push(s);
+        } else if (bracket) {
+          const prev = prevById.get(s.id);
+          const next = nextById.get(s.id) ?? s;
+          renderSnakes.push(interpSnake(prev, next, bracket.alpha));
+        } else {
+          renderSnakes.push(s);
+        }
+      }
+      this.syncMpSnakes(renderSnakes);
+      this.syncMpFoods(latest.foods);
     }
     for (const view of this.snakeViews.values()) {
       view.render();

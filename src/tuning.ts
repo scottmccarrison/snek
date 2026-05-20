@@ -9,6 +9,8 @@ export interface Tuning {
     maxInputsPerSecPerClient: number;
     maxClientLogPerSecPerSocket: number;
     nicknameMaxLen: number;
+    interpolationDelayMs: number;
+    snapshotBufferSize: number;
   };
   snake: {
     speedPxPerSec: number;
@@ -131,6 +133,12 @@ export const tuning: Tuning = {
     maxInputsPerSecPerClient: 60,
     maxClientLogPerSecPerSocket: 30,
     nicknameMaxLen: 3,
+    // Render remote snakes at this delay behind the newest snapshot so the
+    // interpolation buffer always has bracketing frames even under jitter.
+    // ~1.5 server ticks. Tradeoff: more delay = smoother but laggier remotes.
+    interpolationDelayMs: 75,
+    // Snapshots to keep in the client buffer. Covers interpDelay + margin.
+    snapshotBufferSize: 8,
   },
   snake: {
     speedPxPerSec: 180,
