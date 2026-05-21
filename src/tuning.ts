@@ -138,7 +138,7 @@ export const tuning: Tuning = {
     viewRadiusPx: 800,
     maxHumansPerRoom: 8,
     minSnakesPerRoom: 6,
-    totalSnakesPerRoom: 10,
+    totalSnakesPerRoom: 20,
     resumeTokenTtlSec: 60,
     maxInputsPerSecPerClient: 60,
     maxClientLogPerSecPerSocket: 30,
@@ -193,7 +193,7 @@ export const tuning: Tuning = {
     bgGridColor: 0x2a2a35,
   },
   bot: {
-    targetCount: 10,
+    targetCount: 19,
     viewRadiusPx: 300,
     fleeRadiusPx: 250,
     seekRadiusPx: 200,
