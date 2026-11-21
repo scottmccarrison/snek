@@ -61,7 +61,7 @@ Browser-based snake.io / slither.io clone. Open a link, drag your finger, eat do
 ## Conventions
 
 - **GitHub issues are the source of truth** for work tracking. Phase 0-7 milestones. Area labels: `area:client`, `area:server`, `area:netcode`, `area:art`, `area:infra`. Type: `enhancement`, `bug`.
-- **Plans live in the repo** at `docs/plans/phase-N-<shortname>.md`. Committed with the first PR of that phase. Working copies at `~/.claude/plans/*.md` are not canonical.
+- **Plans live in the repo** at `docs/plans/phase-N-<shortname>.md`. Committed with the first PR of that phase. Working copies at `~/.local/share/mimocode/plans/*.md` are not canonical.
 - **No em dashes** in any file or commit message. Use regular hyphens. User preference.
 - **Tunables in `src/tuning.ts`**: head speed, body spacing, food spawn rate, bot count, boost cost, view radius, spatial hash bucket size. No magic numbers in game logic.
 - **Auto-merge** docs/config/infra PRs immediately. **Hold for review**: game logic, netcode, user-visible behavior.
